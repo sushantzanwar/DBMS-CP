@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.log
+token-saver/
+business_service_db.zip
+business_service_db/.doltcfg/
+.playwright-mcp/
+
+# Local Dolt database and dumps: they can hold registered users and password hashes
+business_service_db/
+doltdump/
+*.bundle

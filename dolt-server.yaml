@@ -1,0 +1,13 @@
+# Config for the local Dolt SQL server used by ServicePath AI.
+# Start it from this folder with:  dolt sql-server --config dolt-server.yaml
+log_level: info
+
+listener:
+  host: 127.0.0.1   # only this computer can connect
+  port: 3307
+
+# Folder that contains the Dolt repository (the database name becomes the folder name).
+data_dir: ./business_service_db
+
+behavior:
+  read_only: false  # the app now creates accounts, requests, proposals, transactions and reviews
