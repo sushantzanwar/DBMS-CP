@@ -3,6 +3,7 @@
 // A "transaction" here is only a database RECORD of a deal. No money moves anywhere in this application.
 import { withTransaction, nextId } from './db.js';
 import { HttpError, requireText, optionalText, requireInt, requireMoney } from './errors.js';
+import { normalizePhone, WEBSITE_PATTERN } from './auth.js';
 
 function validDate(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -10,6 +11,59 @@ function validDate(value) {
     throw new HttpError(400, 'Enter a valid date.');
   }
   return value;
+}
+
+// ---------- Business Profile ----------
+// CONCEPTS: UPDATE with WHERE business_id = ? + uniqueness verification against other rows.
+export async function updateProfile(businessId, body) {
+  const name = requireText(body.businessName, 'Business name', 100);
+  const industry = requireText(body.industry, 'Industry', 50);
+  const city = requireText(body.city, 'City', 50);
+  const state = requireText(body.state, 'State', 50);
+  const size = optionalText(body.businessSize, 30);
+  const employees = body.employees !== undefined && body.employees !== null && body.employees !== ''
+    ? requireInt(body.employees, 'Employees', { min: 0 })
+    : null;
+  const revenueRange = optionalText(body.revenueRange, 50);
+  const businessAge = body.businessAge !== undefined && body.businessAge !== null && body.businessAge !== ''
+    ? requireInt(body.businessAge, 'Business age', { min: 0 })
+    : null;
+  const businessStage = optionalText(body.businessStage, 30);
+  const description = optionalText(body.description, 2000);
+  const phone = body.phone ? normalizePhone(body.phone) : null;
+  const website = optionalText(body.website, 150);
+  if (website && !WEBSITE_PATTERN.test(website)) {
+    throw new HttpError(400, 'Enter a valid website address.');
+  }
+
+  return withTransaction(async (connection) => {
+    if (phone || website) {
+      const [taken] = await connection.query(
+        `SELECT (? IS NOT NULL AND phone = ?)   AS phone_taken,
+                (? IS NOT NULL AND website = ?) AS website_taken
+           FROM business
+          WHERE business_id <> ? AND ((? IS NOT NULL AND phone = ?) OR (? IS NOT NULL AND website = ?))`,
+        [phone, phone, website, website, businessId, phone, phone, website, website]
+      );
+      if (taken.some((r) => r.phone_taken)) {
+        throw new HttpError(409, 'This phone number is already registered to another business.');
+      }
+      if (taken.some((r) => r.website_taken)) {
+        throw new HttpError(409, 'This website is already registered to another business.');
+      }
+    }
+
+    await connection.query(
+      `UPDATE business
+          SET business_name = ?, industry = ?, city = ?, state = ?, business_size = ?,
+              employees = ?, revenue_range = ?, business_age = ?, business_stage = ?,
+              description = ?, phone = ?, website = ?
+        WHERE business_id = ?`,
+      [name, industry, city, state, size, employees, revenueRange, businessAge, businessStage, description, phone, website, businessId]
+    );
+
+    return { businessId, message: 'Profile updated successfully.' };
+  });
 }
 
 // ---------- Requests ----------
@@ -145,6 +199,29 @@ export async function completeTransaction(businessId, transactionId) {
     await connection.query("UPDATE `transaction` SET status = 'Completed', completion_date = CURDATE() WHERE transaction_id = ?", [transactionId]);
     await connection.query("UPDATE request SET status = 'Completed' WHERE request_id = ?", [rows[0].request_id]);
     return { transactionId, status: 'Completed' };
+  });
+}
+
+// Payment status update.
+// CONCEPTS: UPDATE with state check and transaction lock (FOR UPDATE).
+export async function setTransactionPaymentStatus(businessId, transactionId, paymentStatus) {
+  if (!['Pending', 'Paid', 'Refunded'].includes(paymentStatus)) {
+    throw new HttpError(400, "Payment status must be 'Pending', 'Paid', or 'Refunded'.");
+  }
+  return withTransaction(async (connection) => {
+    const [rows] = await connection.query(
+      'SELECT buyer_business_id, seller_business_id, status, payment_status FROM `transaction` WHERE transaction_id = ? FOR UPDATE',
+      [transactionId]
+    );
+    if (!rows.length) throw new HttpError(404, 'Transaction not found.');
+    if (rows[0].buyer_business_id !== businessId && rows[0].seller_business_id !== businessId) {
+      throw new HttpError(403, 'Only parties in this transaction can update payment status.');
+    }
+    await connection.query(
+      'UPDATE `transaction` SET payment_status = ? WHERE transaction_id = ?',
+      [paymentStatus, transactionId]
+    );
+    return { transactionId, paymentStatus };
   });
 }
 

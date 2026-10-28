@@ -5,7 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test:phase1": "node test_phase1.js",
+    "test:phase2": "node test_phase2.js",
+    "test:phase_a": "node test_phase_a.js",
+    "test:phase_b": "node test_phase_b.js",
+    "test:e2e": "node test_e2e_flow.js",
+    "audit": "node audit_verification.js",
+    "test": "node test_phase1.js && node test_phase2.js && node test_e2e_flow.js && node test_phase_a.js && node test_phase_b.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

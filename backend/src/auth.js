@@ -7,12 +7,12 @@ import { HttpError, requireText, optionalText } from './errors.js';
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET is missing. Add it to backend/.env');
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[6-9]\d{9}$/; // 10-digit Indian mobile number
-const WEBSITE_PATTERN = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const PHONE_PATTERN = /^[6-9]\d{9}$/; // 10-digit Indian mobile number
+export const WEBSITE_PATTERN = /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
 // Accepts "98765 00015", "98765-00015" or "+91 9876500015" and returns the plain 10 digits.
-function normalizePhone(value) {
+export function normalizePhone(value) {
   const digits = (typeof value === 'string' ? value : '').replace(/[\s-]/g, '').replace(/^(\+91|0)/, '');
   if (!PHONE_PATTERN.test(digits)) {
     throw new HttpError(400, 'Enter a valid 10-digit mobile number (it must start with 6, 7, 8 or 9).');

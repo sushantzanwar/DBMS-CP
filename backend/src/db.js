@@ -1,18 +1,29 @@
 // Database connection module.
 // Credentials come only from environment variables (backend/.env) and never reach the browser.
-import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
+
+// Resolve .env relative to this file so starting from any folder works reliably.
+const envPath = fileURLToPath(new URL('../.env', import.meta.url));
+dotenv.config({ path: envPath });
 
 // A pool keeps a few connections open and reuses them, which is faster than reconnecting per request.
 export const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: process.env.DB_HOST || '127.0.0.1',
+  port: Number(process.env.DB_PORT) || 3307,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'business_service_db',
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
   connectionLimit: 5,
-  connectTimeout: 5000,
+  connectTimeout: 10000,
   dateStrings: true, // return DATE/DATETIME as plain text so the browser does not shift timezones
+});
+
+pool.on('connection', () => {
+  // Connection allocated from pool
 });
 
 // Runs several statements as ONE database transaction: either all succeed (COMMIT) or none do (ROLLBACK).

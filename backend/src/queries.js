@@ -3,6 +3,21 @@
 import { pool } from './db.js';
 import { HttpError } from './errors.js';
 
+// ---------- Database Health & Status ----------
+// CONCEPTS: Introspection functions (DATABASE(), VERSION(), NOW()) + scalar subqueries.
+export async function getHealth() {
+  const [rows] = await pool.query(
+    `SELECT 1 AS healthy,
+            DATABASE() AS database_name,
+            VERSION() AS server_version,
+            NOW() AS server_time,
+            (SELECT COUNT(*) FROM business) AS businesses_count,
+            (SELECT COUNT(*) FROM service) AS services_count,
+            (SELECT COUNT(*) FROM request) AS requests_count`
+  );
+  return { status: 'healthy', database: rows[0] };
+}
+
 // ---------- Dashboard ----------
 // CONCEPT: SELECT + scalar subqueries + single-row functions (COALESCE, ROUND).
 export async function getDashboard(businessId) {
@@ -71,6 +86,29 @@ export async function listBusinesses({ search, topRated }) {
   return rows;
 }
 
+// Current authenticated business's own profile.
+// CONCEPTS: LEFT JOIN with view v_business_rating + COALESCE for NULL safety.
+export async function getMyProfile(businessId) {
+  const [rows] = await pool.query(
+    `SELECT b.business_id, b.business_name, b.industry, b.city, b.state, b.business_size,
+            COALESCE(b.employees, 0)                   AS employees,
+            COALESCE(b.revenue_range, 'Not disclosed') AS revenue_range,
+            b.business_age,
+            COALESCE(b.business_stage, 'Not specified') AS business_stage,
+            COALESCE(b.description, '')                AS description,
+            b.email,
+            COALESCE(b.phone, '')                      AS phone,
+            COALESCE(b.website, '')                    AS website,
+            v.avg_rating, v.review_count
+       FROM business b
+       LEFT JOIN v_business_rating v ON v.business_id = b.business_id
+      WHERE b.business_id = ?`,
+    [businessId]
+  );
+  if (!rows.length) throw new HttpError(404, 'Business profile not found.');
+  return rows[0];
+}
+
 // A full business profile: details, rating, services delivered, open requests and reviews received.
 export async function getBusinessProfile(id) {
   const [details] = await pool.query(
@@ -135,9 +173,34 @@ export async function listServices(filter) {
   return rows;
 }
 
+// Single service details with usage statistics and category benchmark.
+// CONCEPTS: Correlated subquery for category benchmark + scalar subqueries for activity counts.
+export async function getService(id) {
+  const [rows] = await pool.query(
+    `SELECT s.service_id, s.service_name, s.category, UPPER(s.category) AS category_label,
+            s.description, s.average_price, s.complexity, s.remote_available, s.active_status,
+            (SELECT COUNT(*) FROM request r WHERE r.service_id = s.service_id) AS total_requests,
+            (SELECT COUNT(*) FROM \`transaction\` t WHERE t.service_id = s.service_id) AS total_transactions,
+            (SELECT ROUND(AVG(s2.average_price), 2) FROM service s2 WHERE s2.category = s.category) AS category_average
+       FROM service s
+      WHERE s.service_id = ?`,
+    [id]
+  );
+  if (!rows.length) throw new HttpError(404, 'Service not found.');
+  return rows[0];
+}
+
+// Category level overview and traded volumes.
+// CONCEPTS: View consumption (v_category_summary created in Phase 2) + ORDER BY.
+export async function getCategorySummary() {
+  const [rows] = await pool.query('SELECT * FROM v_category_summary ORDER BY total_requests DESC, category');
+  return rows;
+}
+
 // ---------- Requests ----------
-// CONCEPTS: JOINs (inside the view v_request_summary joining request, business, service), date functions.
-// scope = 'open' | 'mine' | 'all'
+// CONCEPTS: JOINs (inside the view v_request_summary joining request, business, service),
+//           correlated subqueries with EXISTS and NOT EXISTS, nested subqueries, and date functions.
+// scope = 'open' | 'mine' | 'all' | 'unbid' | 'my-bids' | 'above-average-budget'
 export async function listRequests(businessId, scope) {
   let where = '';
   let params = [];
@@ -147,6 +210,24 @@ export async function listRequests(businessId, scope) {
   } else if (scope === 'open') {
     where = "WHERE status = 'Open' AND buyer_id <> ?"; // other businesses' open requests
     params = [businessId];
+  } else if (scope === 'unbid') {
+    // CORRELATED SUBQUERY with NOT EXISTS (Semi-difference / anti-semi-join):
+    // Finds open requests by other businesses where the logged-in provider has NOT submitted a proposal yet.
+    where = `WHERE status = 'Open' AND buyer_id <> ?
+               AND NOT EXISTS (SELECT 1 FROM proposal p
+                                WHERE p.request_id = v_request_summary.request_id
+                                  AND p.provider_business_id = ?)`;
+    params = [businessId, businessId];
+  } else if (scope === 'my-bids') {
+    // CORRELATED SUBQUERY with EXISTS:
+    // Requests where the current business HAS submitted a proposal.
+    where = `WHERE EXISTS (SELECT 1 FROM proposal p
+                            WHERE p.request_id = v_request_summary.request_id
+                              AND p.provider_business_id = ?)`;
+    params = [businessId];
+  } else if (scope === 'above-average-budget') {
+    // NESTED SUBQUERY: inner query runs once returning the average maximum budget.
+    where = `WHERE status = 'Open' AND budget_max > (SELECT AVG(budget_max) FROM request WHERE status = 'Open')`;
   }
   const [rows] = await pool.query(
     `SELECT request_id, title, status, buyer_id, buyer_name, buyer_city, service_id, service_name, category,
@@ -219,6 +300,32 @@ export async function listProposals(businessId, scope) {
   return rows;
 }
 
+// Single proposal details.
+// CONCEPTS: 4-table JOIN + CASE statement for budget fit + authorized row-level security.
+export async function getProposal(businessId, proposalId) {
+  const [rows] = await pool.query(
+    `SELECT p.proposal_id, p.request_id, r.title AS request_title, r.status AS request_status,
+            s.service_id, s.service_name, s.category,
+            p.proposed_price, r.budget_min, r.budget_max, p.quantity, p.estimated_delivery_duration,
+            p.message, p.status, DATE_FORMAT(p.submitted_date, '%d %b %Y') AS submitted_on,
+            provider.business_id AS provider_id, provider.business_name AS provider_name,
+            provider.city AS provider_city,
+            buyer.business_id AS buyer_id, buyer.business_name AS buyer_name,
+            CASE WHEN p.proposed_price BETWEEN r.budget_min AND r.budget_max THEN 'Within budget'
+                 WHEN p.proposed_price < r.budget_min THEN 'Below budget'
+                 ELSE 'Above budget' END AS budget_fit
+       FROM proposal p
+       JOIN request  r        ON r.request_id = p.request_id
+       JOIN service  s        ON s.service_id = r.service_id
+       JOIN business provider ON provider.business_id = p.provider_business_id
+       JOIN business buyer    ON buyer.business_id = r.business_id
+      WHERE p.proposal_id = ? AND (p.provider_business_id = ? OR r.business_id = ?)`,
+    [proposalId, businessId, businessId]
+  );
+  if (!rows.length) throw new HttpError(404, 'Proposal not found or access denied.');
+  return rows[0];
+}
+
 // ---------- Transactions ----------
 // CONCEPTS: JOINs (the same business table joined twice, as buyer and as seller), LEFT JOIN, CASE.
 export async function listTransactions(businessId) {
@@ -243,6 +350,32 @@ export async function listTransactions(businessId) {
   return rows;
 }
 
+// Single transaction details with buyer, seller, and linked review.
+// CONCEPTS: Double table JOIN on business (buyer & seller) + LEFT JOIN on review + access filtering.
+export async function getTransaction(businessId, transactionId) {
+  const [rows] = await pool.query(
+    `SELECT t.transaction_id, t.request_id, r.title AS request_title,
+            s.service_id, s.service_name, s.category,
+            buyer.business_id AS buyer_id, buyer.business_name AS buyer_name,
+            seller.business_id AS seller_id, seller.business_name AS seller_name,
+            t.quantity, t.agreed_price, t.status, t.payment_status,
+            DATE_FORMAT(t.start_date, '%d %b %Y')      AS started_on,
+            DATE_FORMAT(t.completion_date, '%d %b %Y') AS completed_on,
+            CASE WHEN t.buyer_business_id = ? THEN 'Buying' ELSE 'Selling' END AS my_role,
+            rv.review_id, rv.rating, rv.review_text
+       FROM \`transaction\` t
+       JOIN request  r      ON r.request_id = t.request_id
+       JOIN service  s      ON s.service_id = t.service_id
+       JOIN business buyer  ON buyer.business_id  = t.buyer_business_id
+       JOIN business seller ON seller.business_id = t.seller_business_id
+       LEFT JOIN review rv  ON rv.transaction_id  = t.transaction_id
+      WHERE t.transaction_id = ? AND (t.buyer_business_id = ? OR t.seller_business_id = ?)`,
+    [businessId, transactionId, businessId, businessId]
+  );
+  if (!rows.length) throw new HttpError(404, 'Transaction not found or access denied.');
+  return rows[0];
+}
+
 // ---------- Reviews ----------
 // CONCEPT: JOINs (review + reviewer + reviewed business + transaction + service), DATE_FORMAT.
 export async function listReviews({ reviewedBusinessId } = {}) {
@@ -265,4 +398,170 @@ export async function listReviews({ reviewedBusinessId } = {}) {
     reviewedBusinessId ? [reviewedBusinessId] : []
   );
   return rows;
+}
+
+// ---------- Phase 2: Advanced JOINs & Analytics Queries ----------
+
+// CONCEPTS: 4-table multi-JOIN (business + transaction + service + review),
+//           multiple aggregates (COUNT DISTINCT, SUM, AVG), GROUP BY, HAVING, and multi-column ORDER BY.
+export async function getTopProviders({ limit = 10 } = {}) {
+  const [rows] = await pool.query(
+    `SELECT b.business_id, b.business_name, b.industry, b.city, b.state, b.business_size,
+            COUNT(DISTINCT t.transaction_id)                   AS completed_deals,
+            COALESCE(SUM(t.agreed_price), 0)                   AS total_revenue,
+            COUNT(DISTINCT t.service_id)                       AS distinct_services_offered,
+            ROUND(AVG(rv.rating), 2)                           AS avg_rating,
+            COUNT(rv.review_id)                                AS total_reviews
+       FROM business b
+       JOIN \`transaction\` t ON t.seller_business_id = b.business_id
+       JOIN service s ON s.service_id = t.service_id
+       LEFT JOIN review rv ON rv.transaction_id = t.transaction_id
+      WHERE t.status = 'Completed'
+      GROUP BY b.business_id, b.business_name, b.industry, b.city, b.state, b.business_size
+     HAVING completed_deals > 0
+      ORDER BY total_revenue DESC, avg_rating DESC
+      LIMIT ?`,
+    [Number(limit) || 10]
+  );
+  return rows;
+}
+
+// CONCEPTS: Anti-Join via LEFT JOIN ... WHERE right.PK IS NULL (Relational Difference R - S).
+// Finds open requests that have received zero proposals yet.
+export async function getUnansweredRequests(businessId) {
+  const [rows] = await pool.query(
+    `SELECT r.request_id, r.title, r.description, r.status, r.budget_min, r.budget_max,
+            DATE_FORMAT(r.created_at, '%d %b %Y')  AS posted_on,
+            DATE_FORMAT(r.required_by, '%d %b %Y') AS required_by,
+            DATEDIFF(r.required_by, CURDATE())     AS days_left,
+            b.business_id AS buyer_id, b.business_name AS buyer_name, b.city AS buyer_city,
+            s.service_id, s.service_name, s.category
+       FROM request r
+       JOIN business b ON b.business_id = r.business_id
+       JOIN service s  ON s.service_id  = r.service_id
+       LEFT JOIN proposal p ON p.request_id = r.request_id
+      WHERE r.status = 'Open'
+        AND p.proposal_id IS NULL
+        AND r.business_id <> ?
+      ORDER BY r.created_at DESC`,
+    [businessId]
+  );
+  return rows;
+}
+
+// CONCEPTS: Multi-table JOIN with dynamic multi-criteria filtering and date arithmetic (DATEDIFF).
+export async function searchRequests({ category, city, minBudget, maxBudget, maxDaysLeft, keyword, businessId } = {}) {
+  const conditions = ["r.status = 'Open'"];
+  const params = [];
+
+  if (businessId) {
+    conditions.push('r.business_id <> ?');
+    params.push(businessId);
+  }
+  if (category) {
+    conditions.push('s.category = ?');
+    params.push(category);
+  }
+  if (city) {
+    conditions.push('(b.city LIKE ? OR r.location_preference LIKE ?)');
+    params.push(`%${city}%`, `%${city}%`);
+  }
+  if (minBudget !== undefined && minBudget !== null && minBudget !== '') {
+    const num = Number(minBudget);
+    if (!Number.isNaN(num)) {
+      conditions.push('r.budget_max >= ?');
+      params.push(num);
+    }
+  }
+  if (maxBudget !== undefined && maxBudget !== null && maxBudget !== '') {
+    const num = Number(maxBudget);
+    if (!Number.isNaN(num)) {
+      conditions.push('r.budget_min <= ?');
+      params.push(num);
+    }
+  }
+  if (maxDaysLeft !== undefined && maxDaysLeft !== null && maxDaysLeft !== '') {
+    const num = Number(maxDaysLeft);
+    if (!Number.isNaN(num)) {
+      conditions.push('DATEDIFF(r.required_by, CURDATE()) <= ? AND DATEDIFF(r.required_by, CURDATE()) >= 0');
+      params.push(num);
+    }
+  }
+  if (keyword) {
+    conditions.push('(r.title LIKE ? OR r.description LIKE ? OR s.service_name LIKE ?)');
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const [rows] = await pool.query(
+    `SELECT r.request_id, r.title, r.description, r.status, r.quantity_required,
+            r.budget_min, r.budget_max,
+            COALESCE(r.location_preference, 'Anywhere') AS location_preference,
+            DATE_FORMAT(r.created_at, '%d %b %Y')       AS posted_on,
+            DATE_FORMAT(r.required_by, '%d %b %Y')      AS required_by,
+            DATEDIFF(r.required_by, CURDATE())          AS days_left,
+            b.business_id AS buyer_id, b.business_name AS buyer_name, b.city AS buyer_city,
+            s.service_id, s.service_name, s.category,
+            (SELECT COUNT(*) FROM proposal p WHERE p.request_id = r.request_id) AS proposal_count
+       FROM request r
+       JOIN business b ON b.business_id = r.business_id
+       JOIN service s  ON s.service_id  = r.service_id
+       ${whereClause}
+      ORDER BY r.created_at DESC`,
+    params
+  );
+  return rows;
+}
+
+// CONCEPTS: Foreign key navigation (request -> business -> service) with specific parent entity filtering.
+export async function getServiceMatchingRequests(serviceId) {
+  const [rows] = await pool.query(
+    `SELECT r.request_id, r.title, r.description, r.budget_min, r.budget_max,
+            r.status, DATE_FORMAT(r.created_at, '%d %b %Y') AS posted_on,
+            DATE_FORMAT(r.required_by, '%d %b %Y') AS required_by,
+            DATEDIFF(r.required_by, CURDATE()) AS days_left,
+            b.business_id AS buyer_id, b.business_name AS buyer_name, b.city AS buyer_city,
+            (SELECT COUNT(*) FROM proposal p WHERE p.request_id = r.request_id) AS proposal_count
+       FROM request r
+       JOIN business b ON b.business_id = r.business_id
+       JOIN service s  ON s.service_id  = r.service_id
+      WHERE r.service_id = ? AND r.status = 'Open'
+      ORDER BY r.created_at DESC`,
+    [serviceId]
+  );
+  return rows;
+}
+
+// CONCEPTS: Dual-role joins on business, conditional aggregation with CASE,
+//           temporal grouping via DATE_FORMAT, and multi-aggregate summary.
+export async function getFinancialSummary(businessId) {
+  const [[totals]] = await pool.query(
+    `SELECT COALESCE(SUM(CASE WHEN t.seller_business_id = ? AND t.status = 'Completed' THEN t.agreed_price ELSE 0 END), 0) AS total_revenue_earned,
+            COALESCE(SUM(CASE WHEN t.buyer_business_id = ?  AND t.status = 'Completed' THEN t.agreed_price ELSE 0 END), 0) AS total_amount_spent,
+            COUNT(CASE WHEN t.seller_business_id = ? THEN 1 END) AS deals_as_seller,
+            COUNT(CASE WHEN t.buyer_business_id = ?  THEN 1 END) AS deals_as_buyer,
+            COUNT(CASE WHEN t.status = 'Active'    THEN 1 END)   AS active_deals_count,
+            COUNT(CASE WHEN t.status = 'Completed' THEN 1 END)   AS completed_deals_count,
+            ROUND(AVG(CASE WHEN t.status = 'Completed' THEN t.agreed_price END), 2) AS avg_completed_deal_value
+       FROM \`transaction\` t
+      WHERE t.buyer_business_id = ? OR t.seller_business_id = ?`,
+    [businessId, businessId, businessId, businessId, businessId, businessId, businessId, businessId]
+  );
+
+  const [monthlyTrend] = await pool.query(
+    `SELECT DATE_FORMAT(t.completion_date, '%Y-%m') AS \`month\`,
+            COUNT(*)                                AS completed_count,
+            COALESCE(SUM(CASE WHEN t.seller_business_id = ? THEN t.agreed_price ELSE 0 END), 0) AS revenue_earned,
+            COALESCE(SUM(CASE WHEN t.buyer_business_id = ?  THEN t.agreed_price ELSE 0 END), 0) AS amount_spent,
+            COALESCE(SUM(t.agreed_price), 0)        AS total_volume
+       FROM \`transaction\` t
+      WHERE (t.buyer_business_id = ? OR t.seller_business_id = ?)
+        AND t.status = 'Completed'
+        AND t.completion_date IS NOT NULL
+      GROUP BY DATE_FORMAT(t.completion_date, '%Y-%m')
+      ORDER BY \`month\` DESC`,
+    [businessId, businessId, businessId, businessId]
+  );
+
+  return { totals, monthlyTrend };
 }

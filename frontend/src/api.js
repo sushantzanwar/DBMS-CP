@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 const TOKEN_KEY = 'servicepath_token';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // The login token lives in sessionStorage, so it disappears when the browser tab is closed.
 export const getToken = () => {
@@ -18,7 +19,7 @@ export async function apiRequest(method, path, body) {
   const token = getToken();
   let response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${API_BASE}/api${path}`, {
       method,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body ? JSON.stringify(body) : undefined,
