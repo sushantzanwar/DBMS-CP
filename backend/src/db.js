@@ -22,7 +22,8 @@ function getSslConfig() {
   const caPath = process.env.DB_CA_PATH || process.env.DB_SSL_CA_PATH;
 
   if (caCert) {
-    ca = caCert.includes('\\n') ? caCert.replace(/\\n/g, '\n') : caCert;
+    const raw = caCert.trim().replace(/^["']|["']$/g, '');
+    ca = raw.includes('\\n') ? raw.replace(/\\n/g, '\n') : raw;
   } else if (caPath) {
     const resolvedPath = path.isAbsolute(caPath)
       ? caPath
