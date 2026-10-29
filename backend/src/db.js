@@ -1,5 +1,6 @@
 // Database connection module.
 // Credentials come only from environment variables (backend/.env) and never reach the browser.
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -9,6 +10,34 @@ import mysql from 'mysql2/promise';
 const envPath = fileURLToPath(new URL('../.env', import.meta.url));
 dotenv.config({ path: envPath });
 
+// Secure SSL/TLS configuration for remote databases (e.g., Aiven MySQL).
+function getSslConfig() {
+  const isSslEnabled = process.env.DB_SSL === 'true' || process.env.DB_SSL === '1';
+  if (!isSslEnabled) {
+    return undefined; // Preserves unencrypted connections for local Dolt/MySQL
+  }
+
+  let ca;
+  const caCert = process.env.DB_CA_CERT || process.env.DB_SSL_CA;
+  const caPath = process.env.DB_CA_PATH || process.env.DB_SSL_CA_PATH;
+
+  if (caCert) {
+    ca = caCert.includes('\\n') ? caCert.replace(/\\n/g, '\n') : caCert;
+  } else if (caPath) {
+    const resolvedPath = path.isAbsolute(caPath)
+      ? caPath
+      : (fs.existsSync(path.resolve(process.cwd(), caPath))
+          ? path.resolve(process.cwd(), caPath)
+          : path.resolve(path.dirname(envPath), caPath));
+    ca = fs.readFileSync(resolvedPath, 'utf8');
+  }
+
+  return {
+    ...(ca ? { ca } : {}),
+    rejectUnauthorized: true,
+  };
+}
+
 // A pool keeps a few connections open and reuses them, which is faster than reconnecting per request.
 export const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
@@ -16,7 +45,7 @@ export const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'business_service_db',
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+  ssl: getSslConfig(),
   connectionLimit: 5,
   connectTimeout: 10000,
   dateStrings: true, // return DATE/DATETIME as plain text so the browser does not shift timezones

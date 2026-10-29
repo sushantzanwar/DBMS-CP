@@ -30,7 +30,8 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 // In production, serve the compiled frontend from ../frontend/dist
 const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 app.use(express.static(frontendDist));
-app.get('*', (req, res, next) => {
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
   if (req.path.startsWith('/api')) return next();
   res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
     if (err) res.status(404).json({ error: 'Not found.' });
@@ -40,4 +41,4 @@ app.get('*', (req, res, next) => {
 app.use((error, req, res, next) => res.status(400).json({ error: 'Invalid request.' }));
 
 const port = Number(process.env.PORT) || Number(process.env.API_PORT) || 4000;
-app.listen(port, () => console.log(`ServicePath API listening on http://localhost:${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`ServicePath API listening on http://0.0.0.0:${port}`));

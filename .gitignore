@@ -34,6 +34,8 @@ business_service_db/
 business_service_db.zip
 business_service_db/.doltcfg/
 doltdump/
+database/backups/
+*.pem
 *.bundle
 *.darc
 *.zip
