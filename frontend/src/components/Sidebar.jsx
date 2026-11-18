@@ -1,58 +1,82 @@
 import React from 'react';
+import { Icon } from './ui.jsx';
 
-const MAIN_NAV = [
-  ['dashboard', 'Overview', '📊'],
-  ['requests', 'Requests', '📋'],
-  ['proposals', 'Proposals', '📝'],
-  ['transactions', 'Transactions', '🤝'],
-  ['businesses', 'Businesses', '🏢'],
-  ['reviews', 'Reviews', '⭐'],
+export const NAV_SECTIONS = [
+  {
+    title: 'Operations',
+    items: [
+      ['dashboard', 'Overview', 'overview'],
+      ['requests', 'Requests', 'requests'],
+      ['proposals', 'Proposals', 'proposals'],
+      ['transactions', 'Transactions', 'transactions'],
+    ],
+  },
+  {
+    title: 'Directory & Analysis',
+    items: [
+      ['businesses', 'Businesses', 'businesses'],
+      ['reviews', 'Reviews', 'reviews'],
+      ['simulation', 'Simulation', 'simulation'],
+      ['forecasts', 'Forecasts', 'forecasts'],
+    ],
+  },
 ];
 
-const INTEL_NAV = [
-  ['simulation', 'Simulation', '⚡', 'What-If'],
-  ['forecasts', 'Forecasts', '📈', 'AI'],
-];
+export const PAGE_LABELS = Object.fromEntries(
+  NAV_SECTIONS.flatMap((s) => s.items.map(([id, label]) => [id, label]))
+);
 
-export default function Sidebar({ page, onSelect }) {
+export default function Sidebar({ page, user, onSelect, onSignOut }) {
+  const initials = (user.businessName || '?')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
   return (
-    <aside className="sidebar">
-      <div className="brand" onClick={() => onSelect('dashboard')} style={{ cursor: 'pointer' }}>
-        <span className="brand-mark">SP</span>
-        <div>
-          <div className="brand-name">ServicePath AI</div>
-          <div className="brand-sub">B2B Service Exchange</div>
-        </div>
-      </div>
+    <aside className="sidebar" aria-label="Primary navigation">
+      <button type="button" className="brand" onClick={() => onSelect('dashboard')}>
+        <span className="brand-mark" aria-hidden="true">SP</span>
+        <span className="brand-text">
+          <span className="brand-name">ServicePath AI</span>
+          <span className="brand-sub">B2B exchange</span>
+        </span>
+      </button>
 
-      <nav>
-        <div className="nav-section-title">MARKETPLACE</div>
-        {MAIN_NAV.map(([id, label, icon]) => (
-          <button
-            key={id}
-            className={`nav-item ${page === id ? 'active' : ''}`}
-            onClick={() => onSelect(id)}
-          >
-            <span className="nav-icon">{icon}</span>
-            <span className="nav-label">{label}</span>
-          </button>
-        ))}
-
-        <div className="nav-section-title" style={{ marginTop: '20px' }}>
-          INTELLIGENCE
-        </div>
-        {INTEL_NAV.map(([id, label, icon, badge]) => (
-          <button
-            key={id}
-            className={`nav-item ${page === id ? 'active' : ''}`}
-            onClick={() => onSelect(id)}
-          >
-            <span className="nav-icon">{icon}</span>
-            <span className="nav-label">{label}</span>
-            {badge && <span className="nav-badge">{badge}</span>}
-          </button>
+      <nav className="rail-nav">
+        {NAV_SECTIONS.map((section) => (
+          <div className="nav-section" key={section.title}>
+            <div className="nav-section-title">{section.title}</div>
+            {section.items.map(([id, label, icon]) => (
+              <button
+                key={id}
+                type="button"
+                className={`nav-item ${page === id ? 'active' : ''}`}
+                aria-current={page === id ? 'page' : undefined}
+                onClick={() => onSelect(id)}
+              >
+                <Icon name={icon} size={16} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
+
+      <div className="rail-footer">
+        <div className="rail-account">
+          <span className="avatar" aria-hidden="true">{initials}</span>
+          <div className="rail-account-meta">
+            <strong>{user.businessName}</strong>
+            <span>{user.city}</span>
+          </div>
+        </div>
+        <button type="button" className="rail-signout" onClick={onSignOut}>
+          <Icon name="logout" size={15} />
+          <span>Sign out</span>
+        </button>
+      </div>
     </aside>
   );
 }

@@ -16,9 +16,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(Boolean(getToken()));
   const [page, setPage] = useState('dashboard');
-  const [profileId, setProfileId] = useState(null); // business profile opened from another page
+  const [profileId, setProfileId] = useState(null);
 
-  // On load, if a token exists, find out who it belongs to.
   useEffect(() => {
     if (!getToken()) return;
     apiRequest('GET', '/auth/me')
@@ -33,17 +32,28 @@ export default function App() {
     setPage('dashboard');
   };
 
-  // The API tells us when the login has expired.
   useEffect(() => {
     window.addEventListener('session-expired', signOut);
     return () => window.removeEventListener('session-expired', signOut);
   }, []);
 
-  if (checking) return <div className="state boot">Loading…</div>;
+  if (checking) {
+    return (
+      <div className="state boot" role="status">
+        <span className="spinner" aria-hidden="true" /> Loading workspace…
+      </div>
+    );
+  }
   if (!user) return <AuthPage onAuthenticated={setUser} />;
 
-  const openBusiness = (id) => { setProfileId(id); setPage('businesses'); };
-  const go = (next) => { setProfileId(null); setPage(next); };
+  const openBusiness = (id) => {
+    setProfileId(id);
+    setPage('businesses');
+  };
+  const go = (next) => {
+    setProfileId(null);
+    setPage(next);
+  };
 
   const pages = {
     dashboard: <Dashboard user={user} go={go} />,
@@ -58,10 +68,15 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar page={page} onSelect={go} />
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      <Sidebar page={page} user={user} onSelect={go} onSignOut={signOut} />
       <div className="main">
-        <TopBar user={user} onSignOut={signOut} />
-        <main className="content">{pages[page]}</main>
+        <TopBar user={user} page={page} onSelect={go} onSignOut={signOut} />
+        <main id="main-content" className="content" tabIndex={-1} key={page}>
+          {pages[page]}
+        </main>
       </div>
     </div>
   );
