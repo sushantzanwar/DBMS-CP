@@ -118,3 +118,23 @@ export function Tabs({ tabs, value, onChange }) {
     </div>
   );
 }
+
+// Collapsible accordion for technical/DBMS concepts that keeps primary views clean for business users.
+export function DetailsPanel({ title, subtitle, badge = 'Technical Details', defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`details-panel ${open ? 'open' : ''}`}>
+      <button type="button" className="details-header" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <div className="details-title-wrap">
+          <span className="details-chevron">{open ? '▼' : '▶'}</span>
+          <div>
+            <div className="details-title">{title}</div>
+            {subtitle && <div className="details-sub">{subtitle}</div>}
+          </div>
+        </div>
+        {badge && <span className="badge">{badge}</span>}
+      </button>
+      {open && <div className="details-content">{children}</div>}
+    </div>
+  );
+}

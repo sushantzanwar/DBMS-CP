@@ -10,10 +10,14 @@ build/
 
 # Local Environment Variables & Secrets
 .env
+.env*
 backend/.env
+backend/.env*
 frontend/.env
 *.env.local
 *.env.*.local
+*.bak
+config.yaml
 
 # Logs and Debugging
 *.log

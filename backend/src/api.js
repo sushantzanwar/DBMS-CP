@@ -44,6 +44,17 @@ api.get('/requests/unanswered', route((req) => read.getUnansweredRequests(req.bu
 api.get('/requests/search', route((req) => read.searchRequests({ ...req.query, businessId: req.businessId })));
 
 api.get('/requests', route((req) => read.listRequests(req.businessId, req.query.scope)));
+api.get('/requests/:id/recommendations', route((req) => read.getRecommendedProvidersForRequest(idParam(req))));
+api.get('/requests/:id/simulate-unavailability', route((req) => read.simulateProviderUnavailability({
+  requestId: req.params.id,
+  unavailableProviderIds: req.query.unavailableProviderIds ?? req.query.providerIds,
+  reason: req.query.reason,
+})));
+api.post('/requests/:id/simulate-unavailability', route((req) => read.simulateProviderUnavailability({
+  requestId: req.params.id,
+  unavailableProviderIds: req.body?.unavailableProviderIds ?? req.body?.providerIds,
+  reason: req.body?.reason,
+})));
 api.get('/requests/:id', route((req) => read.getRequest(req.businessId, idParam(req))));
 api.post('/requests', route((req) => write.createRequest(req.businessId, req.body), 201));
 api.patch('/requests/:id/status', route((req) => write.setRequestStatus(req.businessId, idParam(req), req.body.status)));
@@ -61,6 +72,12 @@ api.patch('/transactions/:id/payment', route((req) => write.setTransactionPaymen
 // Analytics routes
 api.get('/analytics/top-providers', route((req) => read.getTopProviders({ limit: req.query.limit })));
 api.get('/analytics/financial-summary', route((req) => read.getFinancialSummary(req.businessId)));
+api.get('/analytics/demand-forecast', route(() => read.getDemandForecast()));
+api.post('/analytics/simulate-unavailability', route((req) => read.simulateProviderUnavailability({
+  requestId: req.body?.requestId,
+  unavailableProviderIds: req.body?.unavailableProviderIds ?? req.body?.providerIds,
+  reason: req.body?.reason,
+})));
 
 api.get('/reviews', route(() => read.listReviews()));
 api.post('/reviews', route((req) => write.createReview(req.businessId, req.body), 201));

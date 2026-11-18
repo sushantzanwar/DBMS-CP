@@ -9,6 +9,8 @@ import Requests from './components/Requests.jsx';
 import Proposals from './components/Proposals.jsx';
 import Transactions from './components/Transactions.jsx';
 import Reviews from './components/Reviews.jsx';
+import Simulation from './components/Simulation.jsx';
+import Forecasts from './components/Forecasts.jsx';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -50,6 +52,8 @@ export default function App() {
     proposals: <Proposals onOpenBusiness={openBusiness} />,
     transactions: <Transactions go={go} />,
     reviews: <Reviews onOpenBusiness={openBusiness} />,
+    simulation: <Simulation user={user} go={go} onOpenBusiness={openBusiness} />,
+    forecasts: <Forecasts go={go} />,
   };
 
   return (

@@ -146,6 +146,8 @@ function RequestDetail({ id, user, onClose, onChanged, onOpenBusiness }) {
                 <StatusToggle request={r} onDone={refresh} />
               )}
 
+              {isOwner && <SuggestedProviders requestId={r.request_id} onOpenBusiness={onOpenBusiness} />}
+
               <h4>{isOwner ? `Proposals received (${proposals.length})` : 'Your proposal'}</h4>
               {proposals.length === 0 && <div className="muted">{isOwner ? 'No proposals yet.' : 'You have not sent a proposal for this request.'}</div>}
               {proposals.map((p) => (
@@ -217,5 +219,55 @@ function ProposalForm({ requestId, onDone }) {
       {form.error && <div className="form-error">{form.error}</div>}
       <button className="btn" disabled={form.busy}>{form.busy ? 'Sending…' : 'Send proposal'}</button>
     </form>
+  );
+}
+
+function SuggestedProviders({ requestId, onOpenBusiness }) {
+  const recommendations = useApi(`/requests/${requestId}/recommendations`);
+
+  return (
+    <div className="suggested-providers stack">
+      <div className="proposal-head">
+        <h4>⚡ Suggested Matching Providers (SQL Ranked)</h4>
+      </div>
+      <Async result={recommendations} what="recommendations">
+        {(providers) => (
+          <div className="stack" style={{ gap: '0.6rem' }}>
+            {providers.map((p) => (
+              <div
+                key={p.business_id}
+                className="card"
+                style={{ padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button className="link" onClick={() => onOpenBusiness(p.business_id)}>
+                      <strong>{p.business_name}</strong>
+                    </button>
+                    <span className="badge" style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                      {p.match_score}% Match
+                    </span>
+                    {p.has_already_bid ? (
+                      <span className="badge" style={{ background: '#dcfce7', color: '#15803d' }}>Proposal Received</span>
+                    ) : null}
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                    {p.industry} · {p.city}, {p.state} · ⭐ {p.avg_rating || 'Unrated'} ({p.review_count} reviews)
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                    Capability: {p.capability_score}/40 | Location: {p.location_score}/25 | Reputation: {p.reputation_score}/20 | Track Record: {p.track_record_score}/15
+                  </div>
+                </div>
+                <div>
+                  <button className="btn btn-outline" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => onOpenBusiness(p.business_id)}>
+                    View Profile
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Async>
+    </div>
   );
 }
