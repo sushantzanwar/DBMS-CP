@@ -1,4 +1,3 @@
--- Table: review
 DROP TABLE IF EXISTS `review`;
 CREATE TABLE `review` (
   `review_id` int NOT NULL,

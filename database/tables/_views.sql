@@ -1,4 +1,3 @@
--- Views (business_view, large_businesses and pune_businesses are placeholder stubs in the source database)
 SET @previousSqlMode=@@SQL_MODE;
 SET @@SQL_MODE='NO_AUTO_VALUE_ON_ZERO';
 /*!50001 CREATE ALGORITHM=UNDEFINED */

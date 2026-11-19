@@ -1,4 +1,3 @@
--- Table: business
 DROP TABLE IF EXISTS `business`;
 CREATE TABLE `business` (
   `business_id` int NOT NULL,

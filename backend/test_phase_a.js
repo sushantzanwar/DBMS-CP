@@ -1,5 +1,3 @@
-// Automated test suite for Phase A (Assignments 1, 3, 4, 5).
-// Verifies all queries against the actual Dolt/MySQL engine.
 import { pool } from './src/db.js';
 
 async function runPhaseATests() {
@@ -22,12 +20,9 @@ async function runPhaseATests() {
   }
 
   try {
-    // ------------------------------------------------------------------------
-    // ASSIGNMENT 1: DDL, DML & CONSTRAINTS
-    // ------------------------------------------------------------------------
+
     console.log('\n--- TESTING ASSIGNMENT 1: DDL, DML & CONSTRAINTS ---');
 
-    // 1.1 CREATE TABLE with constraints
     await pool.query(`
       CREATE TABLE IF NOT EXISTS demo_service_vendor (
         vendor_id       INT           NOT NULL,
@@ -45,12 +40,10 @@ async function runPhaseATests() {
     `);
     assert('1.1 DDL CREATE TABLE with PK, FK, UNIQUE, CHECK constraints', true);
 
-    // 1.2 ALTER TABLE: Add and Drop Column
     await pool.query(`ALTER TABLE demo_service_vendor ADD COLUMN vendor_tier VARCHAR(10) DEFAULT 'Silver'`);
     await pool.query(`ALTER TABLE demo_service_vendor DROP COLUMN vendor_tier`);
     assert('1.2 DDL ALTER TABLE ADD and DROP column', true);
 
-    // 1.3 DML INSERT
     await pool.query(`
       INSERT INTO demo_service_vendor (vendor_id, business_id, tax_identifier, years_active, hourly_rate, is_verified)
       VALUES (501, 1, 'GSTIN-MH-001', 5, 2500.00, 1),
@@ -59,7 +52,6 @@ async function runPhaseATests() {
     const [insertedRows] = await pool.query('SELECT * FROM demo_service_vendor');
     assert('1.3 DML INSERT rows with valid foreign keys', insertedRows.length === 2, `2 rows inserted`);
 
-    // 1.4 DML UPDATE and DELETE
     await pool.query('UPDATE demo_service_vendor SET hourly_rate = 2750.00 WHERE vendor_id = 501');
     const [[updatedRow]] = await pool.query('SELECT hourly_rate FROM demo_service_vendor WHERE vendor_id = 501');
     assert('1.4 DML UPDATE row', Number(updatedRow.hourly_rate) === 2750.00);
@@ -68,29 +60,21 @@ async function runPhaseATests() {
     const [rowsAfterDelete] = await pool.query('SELECT * FROM demo_service_vendor');
     assert('1.5 DML DELETE row', rowsAfterDelete.length === 1);
 
-    // 1.6 DDL TRUNCATE TABLE
     await pool.query('TRUNCATE TABLE demo_service_vendor');
     const [[truncateCount]] = await pool.query('SELECT COUNT(*) AS c FROM demo_service_vendor');
     assert('1.6 DDL TRUNCATE TABLE resets rows', truncateCount.c === 0);
 
-    // 1.7 Clean Teardown
     await pool.query('DROP TABLE IF EXISTS demo_service_vendor');
     assert('1.7 DDL DROP TABLE teardown', true);
 
-    // ------------------------------------------------------------------------
-    // ASSIGNMENT 3: VIEWS (MULTI-TABLE & UPDATABLE)
-    // ------------------------------------------------------------------------
     console.log('\n--- TESTING ASSIGNMENT 3: VIEWS ---');
 
-    // 3.1 Multi-Table View (v_request_summary)
     const [reqSummary] = await pool.query('SELECT * FROM v_request_summary LIMIT 3');
     assert('3.1 Multi-Table View: v_request_summary', reqSummary.length > 0, `${reqSummary.length} rows returned`);
 
-    // 3.2 Complex Pre-Aggregated View (v_category_summary)
     const [catSummary] = await pool.query('SELECT * FROM v_category_summary');
     assert('3.2 Complex View: v_category_summary without fan-out', catSummary.length === 4, `4 categories verified`);
 
-    // 3.3 Create View with WITH CHECK OPTION
     await pool.query(`
       CREATE OR REPLACE VIEW v_active_service_catalog AS
       SELECT service_id, service_name, category, average_price, complexity, active_status
@@ -101,12 +85,8 @@ async function runPhaseATests() {
     const [activeServices] = await pool.query('SELECT * FROM v_active_service_catalog');
     assert('3.3 View with WITH CHECK OPTION: v_active_service_catalog', activeServices.length === 5, `5 active services`);
 
-    // ------------------------------------------------------------------------
-    // ASSIGNMENT 4: COMPREHENSIVE JOINS
-    // ------------------------------------------------------------------------
     console.log('\n--- TESTING ASSIGNMENT 4: COMPREHENSIVE JOINS ---');
 
-    // 4.1 Equi-Join
     const [equiJoin] = await pool.query(`
       SELECT r.request_id, r.title, b.business_name, s.service_name
         FROM request r
@@ -115,7 +95,6 @@ async function runPhaseATests() {
     `);
     assert('4.1 Equi-Join (request + business + service)', equiJoin.length > 0, `${equiJoin.length} joined rows`);
 
-    // 4.2 Non-Equi Join (BETWEEN)
     const [nonEquiBetween] = await pool.query(`
       SELECT p.proposal_id, p.proposed_price, r.budget_min, r.budget_max
         FROM proposal p
@@ -123,7 +102,6 @@ async function runPhaseATests() {
     `);
     assert('4.2 Non-Equi Join using BETWEEN', nonEquiBetween.length > 0, `${nonEquiBetween.length} matching bids`);
 
-    // 4.3 Non-Equi Self-Join (>)
     const [nonEquiSelf] = await pool.query(`
       SELECT s1.service_name AS higher, s2.service_name AS lower, (s1.average_price - s2.average_price) AS diff
         FROM service s1
@@ -131,7 +109,6 @@ async function runPhaseATests() {
     `);
     assert('4.3 Non-Equi Self-Join on price disparity (>)', nonEquiSelf.length > 0, `Disparity: ₹${nonEquiSelf[0].diff}`);
 
-    // 4.4 Self-Join (Role-based: buyer and seller)
     const [selfJoin] = await pool.query(`
       SELECT t.transaction_id, buyer.business_name AS buyer, seller.business_name AS seller
         FROM \`transaction\` t
@@ -140,7 +117,6 @@ async function runPhaseATests() {
     `);
     assert('4.4 Role-Based Self-Join on transaction parties', selfJoin.length > 0, `${selfJoin.length} transactions`);
 
-    // 4.5 Natural Join (using projected common key service_id to prevent description column collision)
     const [natJoin] = await pool.query(`
       SELECT r.request_id, r.title, r.service_id, s.service_name
         FROM (SELECT request_id, title, service_id FROM request) r
@@ -148,7 +124,6 @@ async function runPhaseATests() {
     `);
     assert('4.5 Natural Join on matching column (service_id)', natJoin.length > 0, `${natJoin.length} rows`);
 
-    // 4.6 Outer Joins (Left, Right, Full Outer Emulation, Anti-Join)
     const [leftJoin] = await pool.query(`
       SELECT b.business_id, b.business_name, rv.review_id
         FROM business b LEFT JOIN review rv ON rv.reviewed_business_id = b.business_id
@@ -169,12 +144,8 @@ async function runPhaseATests() {
     `);
     assert('4.8 Full Outer Join Emulation via UNION', fullOuter.length > 0, `${fullOuter.length} combined rows`);
 
-    // ------------------------------------------------------------------------
-    // ASSIGNMENT 5: ADVANCED SELECT, OPERATORS, SET OPS & SUBQUERIES
-    // ------------------------------------------------------------------------
     console.log('\n--- TESTING ASSIGNMENT 5: ADVANCED SELECT & SET OPERATORS ---');
 
-    // 5.1 Relational & Logical Operators (AND, OR, NOT)
     const [relOps] = await pool.query(`
       SELECT business_id, business_name FROM business
        WHERE state = 'Maharashtra' AND (business_size = 'Large' OR business_size = 'Medium')
@@ -182,7 +153,6 @@ async function runPhaseATests() {
     `);
     assert('5.1 Relational & Compound Logical Operators', relOps.length > 0, `${relOps.length} businesses`);
 
-    // 5.2 Range and Membership (BETWEEN, IN, NOT IN, IS NULL)
     const [rangeOps] = await pool.query(`
       SELECT request_id, budget_max FROM request WHERE budget_max BETWEEN 30000.00 AND 80000.00
     `);
@@ -193,7 +163,6 @@ async function runPhaseATests() {
     `);
     assert('5.3 List Membership Operators: IN and NOT IN', inOps.length > 0, `${inOps.length} services`);
 
-    // 5.3 Pattern Matching (LIKE with % and _)
     const [likePercent] = await pool.query(`
       SELECT business_id, business_name FROM business WHERE business_name LIKE '%Tech%'
     `);
@@ -204,7 +173,6 @@ async function runPhaseATests() {
     `);
     assert('5.5 Pattern Matching: LIKE with single-character wildcard (_)', likeUnderscore.length > 0, `${likeUnderscore.length} matching phones`);
 
-    // 5.4 Aggregate Functions with GROUP BY and HAVING
     const [grpHaving] = await pool.query(`
       SELECT b.business_id, b.business_name,
              COUNT(DISTINCT t.transaction_id) AS total_deals,
@@ -217,7 +185,6 @@ async function runPhaseATests() {
     `);
     assert('5.6 Aggregate Functions with GROUP BY & HAVING', grpHaving.length > 0, `${grpHaving.length} qualified sellers`);
 
-    // 5.5 Set Operators: UNION, UNION ALL, INTERSECT, EXCEPT
     const [unionRows] = await pool.query(`
       SELECT city FROM business WHERE industry = 'Information Technology'
       UNION
@@ -246,7 +213,6 @@ async function runPhaseATests() {
     `);
     assert('5.10 Set Operator: EXCEPT (Buyer-only businesses)', exceptRows.length > 0, `${exceptRows.length} businesses`);
 
-    // 5.6 Single-Row Functions
     const [functionsRow] = await pool.query(`
       SELECT UPPER('technova') AS upper_case,
              CONCAT_WS(', ', 'Pune', 'MH') AS concat_str,
@@ -261,7 +227,6 @@ async function runPhaseATests() {
       Number(functionsRow[0].diff_val) === 0
     );
 
-    // 5.7 Subqueries (Nested & Correlated with EXISTS / NOT EXISTS)
     const [nestedSub] = await pool.query(`
       SELECT service_id, service_name, average_price FROM service
        WHERE active_status = 1 AND average_price > (SELECT AVG(average_price) FROM service WHERE active_status = 1)
@@ -284,7 +249,7 @@ async function runPhaseATests() {
     console.log(`>>> ALL ${passedTests}/${totalTests} PHASE A SQL & DBMS TESTS PASSED! <<<`);
     console.log('========================================================\n');
   } finally {
-    // Teardown view and staging table to ensure zero database pollution
+
     try {
       await pool.query('DROP TABLE IF EXISTS demo_service_vendor');
     } catch (_) {}

@@ -139,7 +139,7 @@ function Profile({ id, onBack }) {
               />
 
               <div className="profile-layout">
-                {/* Primary Evidence Column */}
+
                 <div className="profile-main">
                   <section className="sheet aside-block">
                     <h2 className="aside-heading">Reputation &amp; track record</h2>
@@ -206,7 +206,6 @@ function Profile({ id, onBack }) {
                   </section>
                 </div>
 
-                {/* Secondary Background, Contact & Open Requests Column */}
                 <aside className="profile-aside" aria-label="Company details and open requests">
                   <section className="sheet aside-block">
                     <h2 className="aside-heading">Company &amp; contact</h2>

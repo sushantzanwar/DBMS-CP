@@ -1,4 +1,3 @@
--- Table: transaction
 DROP TABLE IF EXISTS `transaction`;
 CREATE TABLE `transaction` (
   `transaction_id` int NOT NULL,

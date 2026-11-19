@@ -1,4 +1,3 @@
--- Table: proposal
 DROP TABLE IF EXISTS `proposal`;
 CREATE TABLE `proposal` (
   `proposal_id` int NOT NULL,

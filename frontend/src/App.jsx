@@ -11,6 +11,7 @@ import Transactions from './components/Transactions.jsx';
 import Reviews from './components/Reviews.jsx';
 import Simulation from './components/Simulation.jsx';
 import Forecasts from './components/Forecasts.jsx';
+import { ServicePathMark } from './components/BrandLogo.jsx';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -40,7 +41,8 @@ export default function App() {
   if (checking) {
     return (
       <div className="state boot" role="status">
-        <span className="spinner" aria-hidden="true" /> Loading workspace…
+        <ServicePathMark size={32} className="sp-mark-pulse" />
+        <span>Loading workspace…</span>
       </div>
     );
   }

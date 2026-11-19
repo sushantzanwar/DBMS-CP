@@ -496,7 +496,7 @@ function RequestDetail({ id, user, onClose, onChanged, onOpenBusiness }) {
           const alreadyBid = proposals.some((p) => p.provider_id === user.businessId);
           return (
             <div className="stack">
-              {/* Brief & Terms */}
+
               <section className="detail-group">
                 <div className="proposal-head">
                   <div>
@@ -521,7 +521,6 @@ function RequestDetail({ id, user, onClose, onChanged, onOpenBusiness }) {
                 )}
               </section>
 
-              {/* Bids / Provider Proposal Form */}
               <section className="detail-group">
                 <h4>{isOwner ? `Proposals received (${proposals.length})` : 'Your proposal'}</h4>
                 {proposals.length === 0 && (
@@ -564,7 +563,6 @@ function RequestDetail({ id, user, onClose, onChanged, onOpenBusiness }) {
                 )}
               </section>
 
-              {/* Suggested Providers (Buyer view) */}
               {isOwner && <SuggestedProviders requestId={r.request_id} onOpenBusiness={onOpenBusiness} />}
             </div>
           );

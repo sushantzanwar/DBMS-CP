@@ -1,4 +1,3 @@
--- Table: request
 DROP TABLE IF EXISTS `request`;
 CREATE TABLE `request` (
   `request_id` int NOT NULL,

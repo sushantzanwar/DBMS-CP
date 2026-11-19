@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react';
 const TOKEN_KEY = 'servicepath_token';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-// The login token lives in sessionStorage, so it disappears when the browser tab is closed.
 export const getToken = () => {
   try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
 };
@@ -11,10 +10,9 @@ export const setToken = (token) => {
   try {
     if (token) sessionStorage.setItem(TOKEN_KEY, token);
     else sessionStorage.removeItem(TOKEN_KEY);
-  } catch { /* storage unavailable: the user simply has to sign in again */ }
+  } catch {}
 };
 
-// One place that talks to the server. Errors carry a message that is safe to show to the user.
 export async function apiRequest(method, path, body) {
   const token = getToken();
   let response;
@@ -35,7 +33,6 @@ export async function apiRequest(method, path, body) {
   return data;
 }
 
-// Loads data for a page and returns { data, error, loading, reload }. Pass null to skip loading.
 export function useApi(path) {
   const [state, setState] = useState({ data: null, error: null, loading: Boolean(path) });
 

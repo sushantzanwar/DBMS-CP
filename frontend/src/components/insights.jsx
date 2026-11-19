@@ -1,9 +1,6 @@
 import React from 'react';
 import { Disclosure, ScoreMeter } from './ui.jsx';
 
-// Plain-language interpretation of the Phase 1 SQL score components.
-// Mirrors the SQL CASE branches in backend/src/queries.js without recomputing scores.
-
 export function capabilityEvidence(score) {
   const s = Number(score);
   if (s >= 40) return { text: 'Completed this exact service on ServicePath before', level: 'strong' };
@@ -31,7 +28,6 @@ export function trackRecordEvidence(score) {
   return 'No completed contracts yet — estimated from company size';
 }
 
-// Honest match strength label: never claims "qualified" unless direct capability evidence exists.
 export function matchStrength(provider) {
   const cap = capabilityEvidence(provider.capability_score);
   if (cap.level === 'strong') return { label: 'Proven match', tone: 'ok' };

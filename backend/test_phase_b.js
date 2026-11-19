@@ -1,9 +1,3 @@
-/**
- * ServicePath AI - Phase B Automated Test Runner
- * Assignments 6 & 7: Stored Procedures, Parameters, Cursors, and Triggers
- * Runs against live Dolt / MySQL engine.
- */
-
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
@@ -40,12 +34,9 @@ async function runPhaseBTests() {
   console.log('========================================================\n');
 
   try {
-    // -------------------------------------------------------------------------
-    // ASSIGNMENT 6: STORED PROCEDURES, PARAMETERS & CURSORS
-    // -------------------------------------------------------------------------
+
     console.log('--- TESTING ASSIGNMENT 6: STORED PROCEDURES & CURSORS ---');
 
-    // Setup demonstration table for cursor
     await pool.query('DROP TABLE IF EXISTS demo_commission_payout');
     await pool.query(`
       CREATE TABLE demo_commission_payout (
@@ -60,7 +51,6 @@ async function runPhaseBTests() {
       )
     `);
 
-    // 6.1 Create and Test sp_get_request_summary (IN / OUT Parameters)
     await pool.query('DROP PROCEDURE IF EXISTS sp_get_request_summary');
     await pool.query(`
       CREATE PROCEDURE sp_get_request_summary (
@@ -94,7 +84,6 @@ async function runPhaseBTests() {
     `);
     assert('6.1 Stored Procedure DDL: sp_get_request_summary created successfully', true);
 
-    // Call with Request 1001 (has proposals)
     await pool.query('CALL sp_get_request_summary(1001, @title, @buyer, @status, @proposals, @min_bid, @max_bid)');
     const [summary1] = await pool.query('SELECT @title AS title, @buyer AS buyer, @status AS status, @proposals AS proposals, @min_bid AS min_bid, @max_bid AS max_bid');
     assert('6.2 Procedure Call: sp_get_request_summary with active proposals',
@@ -104,7 +93,6 @@ async function runPhaseBTests() {
       `Buyer: ${summary1[0].buyer}, Proposals: ${summary1[0].proposals}, Min Bid: ₹${summary1[0].min_bid}`
     );
 
-    // Call with Request 1005 (unanswered request with 0 proposals)
     await pool.query('CALL sp_get_request_summary(1005, @title5, @buyer5, @status5, @proposals5, @min_bid5, @max_bid5)');
     const [summary5] = await pool.query('SELECT @title5 AS title, @buyer5 AS buyer, @status5 AS status, @proposals5 AS proposals, @min_bid5 AS min_bid, @max_bid5 AS max_bid');
     assert('6.3 Procedure Call: sp_get_request_summary handles zero proposals gracefully',
@@ -113,7 +101,6 @@ async function runPhaseBTests() {
       `Title: ${summary5[0].title}, Proposals: ${summary5[0].proposals}`
     );
 
-    // 6.2 Create and Test sp_calculate_provider_tier (Control Structure: IF / ELSEIF / ELSE)
     await pool.query('DROP PROCEDURE IF EXISTS sp_calculate_provider_tier');
     await pool.query(`
       CREATE PROCEDURE sp_calculate_provider_tier (
@@ -171,7 +158,6 @@ async function runPhaseBTests() {
       `Provider: ${tier4[0].provider}, Tier: ${tier4[0].tier}, Revenue: ₹${tier4[0].rev}, Rating: ${tier4[0].rating}`
     );
 
-    // 6.3 Create and Test sp_batch_calculate_commission_cursor (CURSOR & LOOP)
     await pool.query('DROP PROCEDURE IF EXISTS sp_batch_calculate_commission_cursor');
     await pool.query(`
       CREATE PROCEDURE sp_batch_calculate_commission_cursor (
@@ -255,12 +241,8 @@ async function runPhaseBTests() {
       `${payoutRows.length} commission records generated`
     );
 
-    // -------------------------------------------------------------------------
-    // ASSIGNMENT 7: TRIGGERS (BEFORE / AFTER, VALIDATION & AUDITING)
-    // -------------------------------------------------------------------------
     console.log('\n--- TESTING ASSIGNMENT 7: TRIGGERS ---');
 
-    // Setup demonstration tables
     await pool.query('DROP TABLE IF EXISTS demo_deal_audit_log');
     await pool.query('DROP TABLE IF EXISTS demo_marketplace_deal');
 
@@ -290,7 +272,6 @@ async function runPhaseBTests() {
       )
     `);
 
-    // 7.1 Trigger: BEFORE INSERT
     await pool.query('DROP TRIGGER IF EXISTS trg_deal_before_insert');
     await pool.query(`
       CREATE TRIGGER trg_deal_before_insert
@@ -310,7 +291,6 @@ async function runPhaseBTests() {
     `);
     assert('7.1 Trigger DDL: BEFORE INSERT trg_deal_before_insert created', true);
 
-    // 7.2 Trigger: BEFORE UPDATE
     await pool.query('DROP TRIGGER IF EXISTS trg_deal_before_update');
     await pool.query(`
       CREATE TRIGGER trg_deal_before_update
@@ -332,7 +312,6 @@ async function runPhaseBTests() {
     `);
     assert('7.2 Trigger DDL: BEFORE UPDATE trg_deal_before_update created', true);
 
-    // 7.3 Trigger: AFTER UPDATE
     await pool.query('DROP TRIGGER IF EXISTS trg_deal_after_update');
     await pool.query(`
       CREATE TRIGGER trg_deal_after_update
@@ -360,7 +339,6 @@ async function runPhaseBTests() {
     `);
     assert('7.3 Trigger DDL: AFTER UPDATE trg_deal_after_update created', true);
 
-    // 7.4 Trigger: AFTER DELETE
     await pool.query('DROP TRIGGER IF EXISTS trg_deal_after_delete');
     await pool.query(`
       CREATE TRIGGER trg_deal_after_delete
@@ -386,7 +364,6 @@ async function runPhaseBTests() {
     `);
     assert('7.4 Trigger DDL: AFTER DELETE trg_deal_after_delete created', true);
 
-    // Test 7.5: Positive Insert
     await pool.query(`
       INSERT INTO demo_marketplace_deal (buyer_id, seller_id, agreed_price, deal_status, payment_status)
       VALUES (1, 4, 45000.00, 'Pending', 'Pending')
@@ -394,7 +371,6 @@ async function runPhaseBTests() {
     const [insertedDeal] = await pool.query('SELECT * FROM demo_marketplace_deal WHERE deal_id = 1');
     assert('7.5 Positive Case: Valid record passes BEFORE INSERT trigger', insertedDeal.length === 1 && Number(insertedDeal[0].agreed_price) === 45000.00);
 
-    // Test 7.6: Negative Insert - Value below minimum (< ₹500)
     let caughtMinErr = false;
     try {
       await pool.query(`
@@ -406,7 +382,6 @@ async function runPhaseBTests() {
     }
     assert('7.7 Negative Case: BEFORE INSERT blocks transaction < ₹500 via SIGNAL SQLSTATE', caughtMinErr);
 
-    // Test 7.7: Negative Insert - Self dealing (buyer_id === seller_id)
     let caughtSelfErr = false;
     try {
       await pool.query(`
@@ -418,7 +393,6 @@ async function runPhaseBTests() {
     }
     assert('7.8 Negative Case: BEFORE INSERT blocks self-dealing (buyer == seller)', caughtSelfErr);
 
-    // Test 7.8: Positive Update triggering AFTER UPDATE audit log
     await pool.query(`
       UPDATE demo_marketplace_deal
          SET deal_status = 'In Progress',
@@ -433,7 +407,6 @@ async function runPhaseBTests() {
       auditRows1[0].new_payment_status === 'Escrowed'
     );
 
-    // Test 7.9: Second Update: Transition to Completed
     await pool.query(`
       UPDATE demo_marketplace_deal
          SET deal_status = 'Completed',
@@ -447,7 +420,6 @@ async function runPhaseBTests() {
       auditRows2[1].new_payment_status === 'Released'
     );
 
-    // Test 7.10: Negative Update: Attempting to modify agreed_price on Completed deal
     let caughtPriceErr = false;
     try {
       await pool.query(`
@@ -460,7 +432,6 @@ async function runPhaseBTests() {
     }
     assert('7.11 Negative Case: BEFORE UPDATE blocks modifying price on completed deal', caughtPriceErr);
 
-    // Test 7.11: Positive Deletion triggering AFTER DELETE tombstone
     await pool.query(`
       INSERT INTO demo_marketplace_deal (buyer_id, seller_id, agreed_price, deal_status, payment_status)
       VALUES (2, 5, 20000.00, 'Pending', 'Pending')
@@ -471,7 +442,6 @@ async function runPhaseBTests() {
       deleteAudit.length === 1 && deleteAudit[0].new_deal_status === 'PURGED'
     );
 
-    // 7.13 Persistent Production Trigger: trg_transaction_status_audit
     const [trgRows] = await pool.query(`
       SELECT trigger_name, event_manipulation, event_object_table
         FROM information_schema.triggers
@@ -486,7 +456,7 @@ async function runPhaseBTests() {
     console.log(`>>> ALL ${passedTests}/${totalTests} PHASE B PROCEDURES & TRIGGERS TESTS PASSED! <<<`);
     console.log('========================================================\n');
   } finally {
-    // Teardown temporary demo objects while preserving permanent schema stored procedures
+
     try {
       await pool.query('DROP TRIGGER IF EXISTS trg_deal_before_insert');
       await pool.query('DROP TRIGGER IF EXISTS trg_deal_before_update');

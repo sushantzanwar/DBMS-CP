@@ -1,10 +1,6 @@
-// Every read-only (SELECT) query of the application.
-// Each query is tagged with the DBMS concept it demonstrates. See docs/DBMS_QUERIES.md for the full write-up.
 import { pool } from './db.js';
 import { HttpError, optionalText, requireInt } from './errors.js';
 
-// ---------- Database Health & Status ----------
-// CONCEPTS: Introspection functions (DATABASE(), VERSION(), NOW()) + scalar subqueries.
 export async function getHealth() {
   const [rows] = await pool.query(
     `SELECT 1 AS healthy,
@@ -18,8 +14,6 @@ export async function getHealth() {
   return { status: 'healthy', database: rows[0] };
 }
 
-// ---------- Dashboard ----------
-// CONCEPT: SELECT + scalar subqueries + single-row functions (COALESCE, ROUND).
 export async function getDashboard(businessId) {
   const [[marketplace]] = await pool.query(
     `SELECT (SELECT COUNT(*) FROM business)                                  AS businesses,
@@ -39,7 +33,7 @@ export async function getDashboard(businessId) {
               WHERE (buyer_business_id = ? OR seller_business_id = ?) AND status = 'Active')     AS my_active_deals`,
     [businessId, businessId, businessId, businessId, businessId]
   );
-  // CONCEPT: JOIN through the view v_request_summary + DATE_FORMAT / DATEDIFF date functions.
+
   const [recent] = await pool.query(
     `SELECT request_id, title, buyer_name, service_name, budget_min, budget_max,
             DATE_FORMAT(created_at, '%d %b %Y') AS posted_on,
@@ -52,20 +46,16 @@ export async function getDashboard(businessId) {
   return { marketplace, mine, recent };
 }
 
-// ---------- Businesses ----------
-// CONCEPTS: view (v_business_rating), single-row functions (CONCAT_WS, UPPER, COALESCE, CONCAT),
-//           nested + correlated subquery for the "top rated" filter.
 export async function listBusinesses({ search, topRated }) {
   const conditions = [];
   const params = [];
   if (search) {
-    // The % signs are added to the VALUE, so user text can never become SQL.
+
     conditions.push('(v.business_name LIKE ? OR v.industry LIKE ? OR v.city LIKE ?)');
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
   if (topRated) {
-    // Correlated: the inner query runs once per business (it uses v.business_id from the outer query).
-    // Nested: the right-hand side is a separate inner query computing the average of ALL ratings.
+
     conditions.push(
       `(SELECT AVG(rv.rating) FROM review rv WHERE rv.reviewed_business_id = v.business_id)
          > (SELECT AVG(rating) FROM review)`
@@ -86,8 +76,6 @@ export async function listBusinesses({ search, topRated }) {
   return rows;
 }
 
-// Current authenticated business's own profile.
-// CONCEPTS: LEFT JOIN with view v_business_rating + COALESCE for NULL safety.
 export async function getMyProfile(businessId) {
   const [rows] = await pool.query(
     `SELECT b.business_id, b.business_name, b.industry, b.city, b.state, b.business_size,
@@ -109,7 +97,6 @@ export async function getMyProfile(businessId) {
   return rows[0];
 }
 
-// A full business profile: details, rating, services delivered, open requests and reviews received.
 export async function getBusinessProfile(id) {
   const [details] = await pool.query(
     `SELECT b.business_id, b.business_name, b.industry, b.business_size,
@@ -130,7 +117,6 @@ export async function getBusinessProfile(id) {
   );
   if (!details.length) throw new HttpError(404, 'Business not found.');
 
-  // CONCEPT: JOIN + GROUP BY - which services this business has delivered as a seller.
   const [servicesDelivered] = await pool.query(
     `SELECT s.service_name, s.category, COUNT(*) AS jobs
        FROM \`transaction\` t
@@ -149,16 +135,13 @@ export async function getBusinessProfile(id) {
   return { business: details[0], servicesDelivered, openRequests, reviews };
 }
 
-// ---------- Services ----------
-// CONCEPTS: view (v_service_catalogue); nested subquery; correlated subquery; ROUND / COALESCE / UPPER.
-// filter = 'all' | 'above-average' | 'above-category'
 export async function listServices(filter) {
   let where = '';
   if (filter === 'above-average') {
-    // NESTED: the inner query runs once and returns a single number (the average of all prices).
+
     where = `WHERE c.average_price > (SELECT AVG(average_price) FROM service WHERE active_status = 1)`;
   } else if (filter === 'above-category') {
-    // CORRELATED: the inner query runs per row, using that row's category (c.category).
+
     where = `WHERE c.average_price > (SELECT AVG(s2.average_price) FROM service s2 WHERE s2.category = c.category)`;
   }
   const [rows] = await pool.query(
@@ -173,8 +156,6 @@ export async function listServices(filter) {
   return rows;
 }
 
-// Single service details with usage statistics and category benchmark.
-// CONCEPTS: Correlated subquery for category benchmark + scalar subqueries for activity counts.
 export async function getService(id) {
   const [rows] = await pool.query(
     `SELECT s.service_id, s.service_name, s.category, UPPER(s.category) AS category_label,
@@ -190,17 +171,11 @@ export async function getService(id) {
   return rows[0];
 }
 
-// Category level overview and traded volumes.
-// CONCEPTS: View consumption (v_category_summary created in Phase 2) + ORDER BY.
 export async function getCategorySummary() {
   const [rows] = await pool.query('SELECT * FROM v_category_summary ORDER BY total_requests DESC, category');
   return rows;
 }
 
-// ---------- Requests ----------
-// CONCEPTS: JOINs (inside the view v_request_summary joining request, business, service),
-//           correlated subqueries with EXISTS and NOT EXISTS, nested subqueries, and date functions.
-// scope = 'open' | 'mine' | 'all' | 'unbid' | 'my-bids' | 'above-average-budget'
 export async function listRequests(businessId, scope) {
   let where = '';
   let params = [];
@@ -208,25 +183,23 @@ export async function listRequests(businessId, scope) {
     where = 'WHERE buyer_id = ?';
     params = [businessId];
   } else if (scope === 'open') {
-    where = "WHERE status = 'Open' AND buyer_id <> ?"; // other businesses' open requests
+    where = "WHERE status = 'Open' AND buyer_id <> ?";
     params = [businessId];
   } else if (scope === 'unbid') {
-    // CORRELATED SUBQUERY with NOT EXISTS (Semi-difference / anti-semi-join):
-    // Finds open requests by other businesses where the logged-in provider has NOT submitted a proposal yet.
+
     where = `WHERE status = 'Open' AND buyer_id <> ?
                AND NOT EXISTS (SELECT 1 FROM proposal p
                                 WHERE p.request_id = v_request_summary.request_id
                                   AND p.provider_business_id = ?)`;
     params = [businessId, businessId];
   } else if (scope === 'my-bids') {
-    // CORRELATED SUBQUERY with EXISTS:
-    // Requests where the current business HAS submitted a proposal.
+
     where = `WHERE EXISTS (SELECT 1 FROM proposal p
                             WHERE p.request_id = v_request_summary.request_id
                               AND p.provider_business_id = ?)`;
     params = [businessId];
   } else if (scope === 'above-average-budget') {
-    // NESTED SUBQUERY: inner query runs once returning the average maximum budget.
+
     where = `WHERE status = 'Open' AND budget_max > (SELECT AVG(budget_max) FROM request WHERE status = 'Open')`;
   }
   const [rows] = await pool.query(
@@ -258,8 +231,6 @@ export async function getRequest(businessId, id) {
   if (!rows.length) throw new HttpError(404, 'Request not found.');
   const request = rows[0];
 
-  // The buyer sees every proposal; a provider only sees their own.
-  // CONCEPT: JOIN proposal -> business (the provider who made the offer).
   const [proposals] = await pool.query(
     `SELECT p.proposal_id, p.proposed_price, p.quantity, p.estimated_delivery_duration, p.message, p.status,
             DATE_FORMAT(p.submitted_date, '%d %b %Y') AS submitted_on,
@@ -273,9 +244,6 @@ export async function getRequest(businessId, id) {
   return { request, proposals };
 }
 
-// ---------- Proposals ----------
-// CONCEPT: multi-table JOIN (proposal + request + service + business) with a per-row comparison to the budget.
-// scope = 'received' (offers on my requests) | 'sent' (offers I made)
 export async function listProposals(businessId, scope) {
   const received = scope === 'received';
   const [rows] = await pool.query(
@@ -300,8 +268,6 @@ export async function listProposals(businessId, scope) {
   return rows;
 }
 
-// Single proposal details.
-// CONCEPTS: 4-table JOIN + CASE statement for budget fit + authorized row-level security.
 export async function getProposal(businessId, proposalId) {
   const [rows] = await pool.query(
     `SELECT p.proposal_id, p.request_id, r.title AS request_title, r.status AS request_status,
@@ -326,8 +292,6 @@ export async function getProposal(businessId, proposalId) {
   return rows[0];
 }
 
-// ---------- Transactions ----------
-// CONCEPTS: JOINs (the same business table joined twice, as buyer and as seller), LEFT JOIN, CASE.
 export async function listTransactions(businessId) {
   const [rows] = await pool.query(
     `SELECT t.transaction_id, t.request_id, r.title AS request_title, s.service_name,
@@ -350,8 +314,6 @@ export async function listTransactions(businessId) {
   return rows;
 }
 
-// Single transaction details with buyer, seller, and linked review.
-// CONCEPTS: Double table JOIN on business (buyer & seller) + LEFT JOIN on review + access filtering.
 export async function getTransaction(businessId, transactionId) {
   const [rows] = await pool.query(
     `SELECT t.transaction_id, t.request_id, r.title AS request_title,
@@ -376,8 +338,6 @@ export async function getTransaction(businessId, transactionId) {
   return rows[0];
 }
 
-// ---------- Reviews ----------
-// CONCEPT: JOINs (review + reviewer + reviewed business + transaction + service), DATE_FORMAT.
 export async function listReviews({ reviewedBusinessId } = {}) {
   const where = reviewedBusinessId ? 'WHERE rv.reviewed_business_id = ?' : '';
   const [rows] = await pool.query(
@@ -400,10 +360,6 @@ export async function listReviews({ reviewedBusinessId } = {}) {
   return rows;
 }
 
-// ---------- Phase 2: Advanced JOINs & Analytics Queries ----------
-
-// CONCEPTS: 4-table multi-JOIN (business + transaction + service + review),
-//           multiple aggregates (COUNT DISTINCT, SUM, AVG), GROUP BY, HAVING, and multi-column ORDER BY.
 export async function getTopProviders({ limit = 10 } = {}) {
   const [rows] = await pool.query(
     `SELECT b.business_id, b.business_name, b.industry, b.city, b.state, b.business_size,
@@ -426,8 +382,6 @@ export async function getTopProviders({ limit = 10 } = {}) {
   return rows;
 }
 
-// CONCEPTS: Anti-Join via LEFT JOIN ... WHERE right.PK IS NULL (Relational Difference R - S).
-// Finds open requests that have received zero proposals yet.
 export async function getUnansweredRequests(businessId) {
   const [rows] = await pool.query(
     `SELECT r.request_id, r.title, r.description, r.status, r.budget_min, r.budget_max,
@@ -449,7 +403,6 @@ export async function getUnansweredRequests(businessId) {
   return rows;
 }
 
-// CONCEPTS: Multi-table JOIN with dynamic multi-criteria filtering and date arithmetic (DATEDIFF).
 export async function searchRequests({ category, city, minBudget, maxBudget, maxDaysLeft, keyword, businessId } = {}) {
   const conditions = ["r.status = 'Open'"];
   const params = [];
@@ -531,9 +484,6 @@ export async function getServiceMatchingRequests(serviceId) {
   return rows;
 }
 
-// Shared canonical SQL ranking query used by both Phase 1 (Provider Matching) and
-// Phase 3 (Market Event Simulation & Alternative Provider Recommendations).
-// Excludes buyer business and any simulated unavailable provider IDs BEFORE applying ORDER BY and LIMIT.
 async function queryRankedProviders(requestId, { excludeIds = [], limit = 5 } = {}) {
   const hasExclusions = Array.isArray(excludeIds) && excludeIds.length > 0;
   const exclusionPlaceholders = hasExclusions ? excludeIds.map(() => '?').join(', ') : '';
@@ -551,33 +501,33 @@ async function queryRankedProviders(requestId, { excludeIds = [], limit = 5 } = 
       b.business_size,
       vbr.avg_rating,
       vbr.review_count,
-      (CASE 
+      (CASE
         WHEN EXISTS (
-          SELECT 1 FROM \`transaction\` t 
-          WHERE t.seller_business_id = b.business_id 
-            AND t.service_id = req.service_id 
+          SELECT 1 FROM \`transaction\` t
+          WHERE t.seller_business_id = b.business_id
+            AND t.service_id = req.service_id
             AND t.status = 'Completed'
         ) THEN 40
         WHEN EXISTS (
-          SELECT 1 FROM proposal p 
-          JOIN request r_hist ON r_hist.request_id = p.request_id 
-          WHERE p.provider_business_id = b.business_id 
+          SELECT 1 FROM proposal p
+          JOIN request r_hist ON r_hist.request_id = p.request_id
+          WHERE p.provider_business_id = b.business_id
             AND r_hist.service_id = req.service_id
         ) THEN 30
         WHEN b.industry = svc.category OR b.industry LIKE CONCAT('%', svc.category, '%') THEN 20
         ELSE 10
       END) AS capability_score,
-      (CASE 
+      (CASE
         WHEN req.location_preference IS NULL OR req.location_preference = '' OR req.location_preference = 'Anywhere' OR req.location_preference = 'Remote' THEN 25
         WHEN LOWER(b.city) = LOWER(req.location_preference) THEN 25
         WHEN LOWER(b.state) = (SELECT LOWER(state) FROM business WHERE business_id = req.business_id) THEN 15
         ELSE 5
       END) AS location_score,
-      (CASE 
+      (CASE
         WHEN vbr.avg_rating IS NOT NULL THEN ROUND((vbr.avg_rating / 5.0) * 20, 1)
         ELSE 10.0
       END) AS reputation_score,
-      (CASE 
+      (CASE
         WHEN (SELECT COUNT(*) FROM \`transaction\` t WHERE t.seller_business_id = b.business_id AND t.status = 'Completed') >= 2 THEN 15
         WHEN (SELECT COUNT(*) FROM \`transaction\` t WHERE t.seller_business_id = b.business_id AND t.status = 'Completed') = 1 THEN 10
         WHEN b.business_size = 'Large' THEN 8
@@ -585,36 +535,36 @@ async function queryRankedProviders(requestId, { excludeIds = [], limit = 5 } = 
         ELSE 4
       END) AS track_record_score,
       ROUND(
-        (CASE 
+        (CASE
           WHEN EXISTS (
-            SELECT 1 FROM \`transaction\` t 
-            WHERE t.seller_business_id = b.business_id 
-              AND t.service_id = req.service_id 
+            SELECT 1 FROM \`transaction\` t
+            WHERE t.seller_business_id = b.business_id
+              AND t.service_id = req.service_id
               AND t.status = 'Completed'
           ) THEN 40
           WHEN EXISTS (
-            SELECT 1 FROM proposal p 
-            JOIN request r_hist ON r_hist.request_id = p.request_id 
-            WHERE p.provider_business_id = b.business_id 
+            SELECT 1 FROM proposal p
+            JOIN request r_hist ON r_hist.request_id = p.request_id
+            WHERE p.provider_business_id = b.business_id
               AND r_hist.service_id = req.service_id
           ) THEN 30
           WHEN b.industry = svc.category OR b.industry LIKE CONCAT('%', svc.category, '%') THEN 20
           ELSE 10
         END)
         +
-        (CASE 
+        (CASE
           WHEN req.location_preference IS NULL OR req.location_preference = '' OR req.location_preference = 'Anywhere' OR req.location_preference = 'Remote' THEN 25
           WHEN LOWER(b.city) = LOWER(req.location_preference) THEN 25
           WHEN LOWER(b.state) = (SELECT LOWER(state) FROM business WHERE business_id = req.business_id) THEN 15
           ELSE 5
         END)
         +
-        (CASE 
+        (CASE
           WHEN vbr.avg_rating IS NOT NULL THEN (vbr.avg_rating / 5.0) * 20
           ELSE 10.0
         END)
         +
-        (CASE 
+        (CASE
           WHEN (SELECT COUNT(*) FROM \`transaction\` t WHERE t.seller_business_id = b.business_id AND t.status = 'Completed') >= 2 THEN 15
           WHEN (SELECT COUNT(*) FROM \`transaction\` t WHERE t.seller_business_id = b.business_id AND t.status = 'Completed') = 1 THEN 10
           WHEN b.business_size = 'Large' THEN 8
@@ -623,7 +573,7 @@ async function queryRankedProviders(requestId, { excludeIds = [], limit = 5 } = 
         END)
       ) AS match_score,
       (EXISTS (
-        SELECT 1 FROM proposal p 
+        SELECT 1 FROM proposal p
         WHERE p.request_id = req.request_id AND p.provider_business_id = b.business_id
       )) AS has_already_bid
     FROM request req
@@ -644,8 +594,6 @@ async function queryRankedProviders(requestId, { excludeIds = [], limit = 5 } = 
   return rows;
 }
 
-// Recommends top matching providers for a specific request using weighted multi-criteria scoring.
-// CONCEPTS: Complex multi-table JOINs, CASE expressions, scalar subqueries, and non-equi joins.
 export async function getRecommendedProvidersForRequest(requestId) {
   const validId = requireInt(requestId, 'Request id');
   const [reqRows] = await pool.query(
@@ -657,13 +605,9 @@ export async function getRecommendedProvidersForRequest(requestId) {
   return queryRankedProviders(validId, { excludeIds: [], limit: 5 });
 }
 
-// ---------- Phase 3: Read-Only Market Event Simulation & Alternative Provider Recommendations ----------
-// CONCEPTS: Ephemeral read-only what-if analysis, SQL WHERE-clause exclusion (NOT IN) prior to ORDER BY + LIMIT,
-//           reusing Phase 1 multi-criteria scoring, and rank-shift / standby promotion explanation.
 export async function simulateProviderUnavailability({ requestId, unavailableProviderIds, reason } = {}) {
   const validRequestId = requireInt(requestId, 'Request id');
 
-  // 1. Fetch request context
   const [reqRows] = await pool.query(
     `SELECT r.request_id, r.title, r.status, r.business_id AS buyer_id, b.business_name AS buyer_name,
             b.city AS buyer_city, b.state AS buyer_state,
@@ -679,7 +623,6 @@ export async function simulateProviderUnavailability({ requestId, unavailablePro
   if (!reqRows.length) throw new HttpError(404, 'Request not found.');
   const request = reqRows[0];
 
-  // 2. Parse & validate unavailableProviderIds
   let rawIds = unavailableProviderIds;
   if (typeof rawIds === 'string') {
     rawIds = rawIds
@@ -704,7 +647,6 @@ export async function simulateProviderUnavailability({ requestId, unavailablePro
     throw new HttpError(400, 'The buyer business cannot be selected as an unavailable service provider.');
   }
 
-  // Verify all specified unavailable providers exist in business table
   const placeholders = uniqueIds.map(() => '?').join(', ');
   const [unavailableBizRows] = await pool.query(
     `SELECT business_id, business_name, industry, city, state, business_size
@@ -720,9 +662,6 @@ export async function simulateProviderUnavailability({ requestId, unavailablePro
   const eventReason =
     optionalText(reason, 200) || 'Provider capacity overload / temporary market unavailability';
 
-  // 3. Execute ephemeral read-only SQL queries:
-  //    a) Full baseline ranking to know every candidate's baseline rank (and slice top 5 for baseline view)
-  //    b) Simulated ranking excluding unavailable providers in SQL WHERE before ORDER BY ... LIMIT 5
   const fullBaseline = await queryRankedProviders(validRequestId, { excludeIds: [], limit: 50 });
   const baselineTop5 = fullBaseline.slice(0, 5);
   const simulatedTop5 = await queryRankedProviders(validRequestId, { excludeIds: uniqueIds, limit: 5 });
@@ -734,7 +673,6 @@ export async function simulateProviderUnavailability({ requestId, unavailablePro
 
   const baselineTopScore = baselineTop5.length ? Number(baselineTop5[0].match_score) : 0;
 
-  // 4. Annotate baseline top 5
   const annotatedBaseline = baselineTop5.map((row, idx) => {
     const isUnavailable = uniqueIds.includes(Number(row.business_id));
     return {
@@ -745,7 +683,6 @@ export async function simulateProviderUnavailability({ requestId, unavailablePro
     };
   });
 
-  // 5. Annotate simulated alternatives (ranked 1..5 after pre-LIMIT SQL exclusion)
   const annotatedAlternatives = simulatedTop5.map((row, idx) => {
     const simulatedRank = idx + 1;
     const originalRank = baselineRankById.get(Number(row.business_id)) || null;
@@ -825,8 +762,6 @@ export async function simulateProviderUnavailability({ requestId, unavailablePro
   };
 }
 
-// CONCEPTS: Dual-role joins on business, conditional aggregation with CASE,
-//           temporal grouping via DATE_FORMAT, and multi-aggregate summary.
 export async function getFinancialSummary(businessId) {
   const [[totals]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN t.seller_business_id = ? AND t.status = 'Completed' THEN t.agreed_price ELSE 0 END), 0) AS total_revenue_earned,
@@ -859,12 +794,8 @@ export async function getFinancialSummary(businessId) {
   return { totals, monthlyTrend };
 }
 
-// ---------- Phase 2 Enhancement: Service Demand Forecasting ----------
-// CONCEPTS: Relational JOIN (synthetic_request_history + service), temporal grouping via DATE_FORMAT('%Y-%m'),
-//           GROUP BY category & month, chronological holdout evaluation (OLS Linear Regression vs Last-Value Baseline),
-//           and MAE / RMSE calculation without invented confidence scores.
 export async function getDemandForecast() {
-  // 1. Check real production request table volume first to document why isolated synthetic history is used.
+
   const [realMonthly] = await pool.query(
     `SELECT s.category,
             DATE_FORMAT(r.created_at, '%Y-%m') AS \`month\`,
@@ -878,7 +809,6 @@ export async function getDemandForecast() {
   const totalRealRequests = realMonthly.reduce((sum, r) => sum + Number(r.request_count), 0);
   const distinctRealMonths = new Set(realMonthly.map((r) => r.month)).size;
 
-  // 2. Aggregate isolated 24-month synthetic request history by category and month using SQL GROUP BY & DATE_FORMAT.
   const [syntheticMonthly] = await pool.query(
     `SELECT s.category,
             DATE_FORMAT(h.request_date, '%Y-%m') AS \`month\`,
@@ -891,7 +821,6 @@ export async function getDemandForecast() {
       ORDER BY s.category ASC, \`month\` ASC`
   );
 
-  // Group series by category in chronological order
   const byCategory = {};
   for (const row of syntheticMonthly) {
     if (!byCategory[row.category]) byCategory[row.category] = [];
@@ -912,14 +841,13 @@ export async function getDemandForecast() {
 
   for (let idx = 0; idx < categories.length; idx++) {
     const category = categories[idx];
-    const series = byCategory[category]; // 24 months: t = 1..24
+    const series = byCategory[category];
     const nTotal = series.length;
-    const nTrain = Math.floor(nTotal * 0.75); // 18 training months (2024-11 .. 2026-04)
-    const nTest = nTotal - nTrain;            // 6 holdout test months (2026-05 .. 2026-10)
+    const nTrain = Math.floor(nTotal * 0.75);
+    const nTest = nTotal - nTrain;
 
     const trainSet = series.slice(0, nTrain);
 
-    // Fit Ordinary Least Squares (OLS) simple linear regression y = intercept + slope * t on training set (t = 1..nTrain)
     let sumT = 0;
     let sumY = 0;
     for (let i = 0; i < nTrain; i++) {
@@ -941,7 +869,6 @@ export async function getDemandForecast() {
     const slope = den === 0 ? 0 : num / den;
     const intercept = meanY - slope * meanT;
 
-    // Evaluate on chronological holdout test set (t = nTrain+1 .. nTotal) against Last-Value (Naive) baseline y_{t-1}
     const holdoutComparisons = [];
     let regAbsSum = 0;
     let regSqSum = 0;
@@ -952,7 +879,7 @@ export async function getDemandForecast() {
       const t = i + 1;
       const actual = series[i].requestCount;
       const regPred = intercept + slope * t;
-      const naivePred = series[i - 1].requestCount; // Last observed value y_{t-1}
+      const naivePred = series[i - 1].requestCount;
 
       const regAbsErr = Math.abs(actual - regPred);
       const regSqErr = (actual - regPred) ** 2;
@@ -983,7 +910,6 @@ export async function getDemandForecast() {
     const naiveMae = Number((naiveAbsSum / nTest).toFixed(4));
     const naiveRmse = Number(Math.sqrt(naiveSqSum / nTest).toFixed(4));
 
-    // Next period forecast (t = nTotal + 1 => 2026-11)
     const nextT = nTotal + 1;
     const nextMonthLabel = '2026-11';
     const predictedNextMonth = Number(Math.max(0, intercept + slope * nextT).toFixed(2));
@@ -991,7 +917,6 @@ export async function getDemandForecast() {
     const trendDirection =
       slope > 0.15 ? 'Upward' : slope < -0.15 ? 'Downward' : 'Stable';
 
-    // Persist evaluated forecast record into service_demand_forecast
     await pool.query(
       `INSERT INTO service_demand_forecast
         (forecast_id, category, forecast_month, predicted_requests, naive_baseline_requests,
@@ -1099,4 +1024,3 @@ export async function getDemandForecast() {
     categories: categoryForecasts,
   };
 }
-

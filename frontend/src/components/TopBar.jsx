@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ServicePathMark } from './BrandLogo.jsx';
 import { Icon } from './ui.jsx';
 import { NAV_SECTIONS, PAGE_LABELS } from './Sidebar.jsx';
 
-// Compact header shown only on narrow screens (<= 860px) where the left rail collapses.
-// Keeps current location, all 8 destinations, and account sign-out reachable in one 52px bar.
 export default function TopBar({ user, page, onSelect, onSignOut }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -41,6 +40,7 @@ export default function TopBar({ user, page, onSelect, onSignOut }) {
           onClick={() => setMenuOpen((o) => !o)}
         >
           <Icon name={menuOpen ? 'close' : 'menu'} size={18} />
+          <ServicePathMark size={24} theme="dark" />
           <span className="mobile-loc">{currentLabel}</span>
         </button>
 

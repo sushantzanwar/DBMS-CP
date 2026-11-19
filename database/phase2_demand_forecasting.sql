@@ -1,11 +1,3 @@
--- ============================================================================
--- ServicePath AI — Phase 2: Service Demand Forecasting (Isolated Synthetic Data)
--- ============================================================================
--- NOTE: This script does NOT insert into or alter the production `request` table
--- or any of the 7 core marketplace tables. All historical training/evaluation
--- records live in `synthetic_request_history` with `is_synthetic = 1`.
--- ============================================================================
-
 DROP TABLE IF EXISTS service_demand_forecast;
 DROP TABLE IF EXISTS synthetic_request_history;
 

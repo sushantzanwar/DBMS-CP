@@ -10,7 +10,7 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '100kb' }));
 
-// Enable CORS so frontend works whether hosted on the same origin or across different domains
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -21,13 +21,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// API routes
+
 app.use('/api', api);
 
-// 404 handler for unmatched /api routes
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
-// In production, serve the compiled frontend from ../frontend/dist
+
 const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 app.use(express.static(frontendDist));
 app.use((req, res, next) => {

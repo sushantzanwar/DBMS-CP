@@ -1,4 +1,4 @@
-CREATE DATABASE IF NOT EXISTS `business_service_db`; USE `business_service_db`; 
+CREATE DATABASE IF NOT EXISTS `business_service_db`; USE `business_service_db`;
 SET FOREIGN_KEY_CHECKS=0;
 SET UNIQUE_CHECKS=0;
 DROP TABLE IF EXISTS `account`;

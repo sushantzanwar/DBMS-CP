@@ -1,6 +1,3 @@
-// End-to-End lifecycle test: Frontend/API -> Backend -> Dolt Database
-// Tests registration, login, request creation, proposal submission, ACID transaction acceptance,
-// deal completion, review creation, and analytics, followed by complete cleanup.
 import express from 'express';
 import { pool } from './src/db.js';
 import { api } from './src/api.js';
@@ -30,7 +27,6 @@ async function runE2E() {
   server = app.listen(PORT);
   console.log(`[PASS] Integration test server listening on port ${PORT}`);
 
-  // Track created entities for 100% clean teardown
   let buyerBusinessId = null;
   let buyerToken = null;
   let sellerBusinessId = null;
@@ -41,13 +37,12 @@ async function runE2E() {
   let createdReviewId = null;
 
   try {
-    // 1. Health Check
+
     console.log('\n--- 1. Database Health Check ---');
     const health = await request('/health');
     if (health.status !== 200 || health.data.status !== 'healthy') throw new Error('Health check failed');
     console.log('[PASS] Database is healthy:', health.data.database.database_name);
 
-    // 2. Buyer Registration & Login
     console.log('\n--- 2. Buyer Registration & Authentication ---');
     const buyerEmail = `e2e_buyer_${Date.now()}@test.com`;
     const buyerPhone = `987${Math.floor(1000000 + Math.random() * 9000000)}`;
@@ -70,7 +65,6 @@ async function runE2E() {
     buyerToken = regBuyer.data.token;
     console.log(`[PASS] Registered Buyer ID: ${buyerBusinessId}`);
 
-    // Verify Login endpoint
     const loginBuyer = await request('/auth/login', {
       method: 'POST',
       body: { email: buyerEmail, password: 'Password123' }
@@ -78,7 +72,6 @@ async function runE2E() {
     if (loginBuyer.status !== 200 || !loginBuyer.data.token) throw new Error('Buyer login failed');
     console.log('[PASS] Buyer successfully logged in via POST /auth/login');
 
-    // 3. Provider Registration
     console.log('\n--- 3. Provider Registration & Authentication ---');
     const sellerEmail = `e2e_seller_${Date.now()}@test.com`;
     const sellerPhone = `987${Math.floor(1000000 + Math.random() * 9000000)}`;
@@ -101,13 +94,12 @@ async function runE2E() {
     sellerToken = regSeller.data.token;
     console.log(`[PASS] Registered Provider ID: ${sellerBusinessId}`);
 
-    // 4. Buyer Posts a Request
     console.log('\n--- 4. Request Posting (Buyer) ---');
     const createReq = await request('/requests', {
       method: 'POST',
       headers: { Authorization: `Bearer ${buyerToken}` },
       body: {
-        serviceId: 101, // Web Development
+        serviceId: 101,
         title: 'E2E Corporate Portal Development',
         description: 'Need a fast modern responsive web portal.',
         quantityRequired: 1,
@@ -121,7 +113,6 @@ async function runE2E() {
     createdRequestId = createReq.data.requestId;
     console.log(`[PASS] Created Request ID: ${createdRequestId}`);
 
-    // 5. Provider Discovers Request via Search & Matching
     console.log('\n--- 5. Request Discovery & Search (Provider) ---');
     const searchReq = await request(`/requests/search?category=IT&minBudget=40000`, {
       headers: { Authorization: `Bearer ${sellerToken}` }
@@ -131,7 +122,6 @@ async function runE2E() {
     }
     console.log('[PASS] Provider discovered open request via /requests/search');
 
-    // 6. Provider Submits Proposal
     console.log('\n--- 6. Proposal Submission (Provider) ---');
     const submitProp = await request('/proposals', {
       method: 'POST',
@@ -148,7 +138,6 @@ async function runE2E() {
     createdProposalId = submitProp.data.proposalId;
     console.log(`[PASS] Provider submitted Proposal ID: ${createdProposalId}`);
 
-    // 7. Buyer Reviews & Accepts Proposal (ACID Transaction)
     console.log('\n--- 7. ACID Transaction: Accepting Proposal ---');
     const acceptProp = await request(`/proposals/${createdProposalId}/status`, {
       method: 'PATCH',
@@ -161,14 +150,12 @@ async function runE2E() {
     createdTransactionId = acceptProp.data.transactionId;
     console.log(`[PASS] Proposal accepted. Created Deal Record (Transaction ID: ${createdTransactionId})`);
 
-    // Verify Deal state
     const txCheck = await request(`/transactions/${createdTransactionId}`, {
       headers: { Authorization: `Bearer ${buyerToken}` }
     });
     if (txCheck.status !== 200 || txCheck.data.status !== 'Active') throw new Error('Transaction state mismatch');
     console.log('[PASS] Transaction record active with agreed price ₹75,000');
 
-    // 8. Buyer Completes Deal
     console.log('\n--- 8. Completing Deal & Payment Update ---');
     const completeTx = await request(`/transactions/${createdTransactionId}/complete`, {
       method: 'PATCH',
@@ -185,7 +172,6 @@ async function runE2E() {
     if (payTx.status !== 200) throw new Error('Payment update failed');
     console.log('[PASS] Payment status set to Paid.');
 
-    // 9. Buyer Submits Review
     console.log('\n--- 9. Buyer Submits Review ---');
     const createRev = await request('/reviews', {
       method: 'POST',
@@ -203,7 +189,6 @@ async function runE2E() {
     createdReviewId = createRev.data.reviewId;
     console.log(`[PASS] Review ID: ${createdReviewId} submitted with 5-star rating.`);
 
-    // 10. Analytics & Views Verification
     console.log('\n--- 10. Analytics & Views Verification ---');
     const catCheck = await request('/categories/summary', { headers: { Authorization: `Bearer ${buyerToken}` } });
     if (catCheck.status !== 200) throw new Error('Category summary failed');
@@ -215,7 +200,7 @@ async function runE2E() {
 
     console.log('\n>>> COMPLETE END-TO-END FLOW PASSED WITH 100% SUCCESS! <<<');
   } finally {
-    // 11. Complete Clean Teardown
+
     console.log('\n--- Performing Complete Test Data Teardown ---');
     try {
       if (createdReviewId) {
@@ -253,4 +238,3 @@ runE2E().catch((err) => {
   if (server) server.close();
   process.exit(1);
 });
-

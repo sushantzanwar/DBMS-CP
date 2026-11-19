@@ -1,4 +1,3 @@
-// An error whose message is safe to show to the user.
 export class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -6,7 +5,6 @@ export class HttpError extends Error {
   }
 }
 
-// Turns any error into { status, message }. Raw database messages are never sent to the browser.
 export function toClientError(error) {
   if (error instanceof HttpError) return { status: error.status, message: error.message };
   if (error.code === 'ER_DUP_ENTRY') return { status: 409, message: 'That record already exists.' };
@@ -17,7 +15,6 @@ export function toClientError(error) {
   return { status: 503, message: 'Something went wrong. Please try again in a moment.' };
 }
 
-// Small input checks used by the write operations.
 export function requireText(value, label, max) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (!text) throw new HttpError(400, `${label} is required.`);

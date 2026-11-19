@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { apiRequest, setToken } from '../api.js';
+import { ServicePathLogo } from './BrandLogo.jsx';
 import { Field, useForm } from './ui.jsx';
 
 const SIZES = ['Small', 'Medium', 'Large'];
@@ -201,11 +202,7 @@ export default function AuthPage({ onAuthenticated }) {
       <section className="auth-panel">
         <div className="auth-card">
           <div className="auth-brand-row">
-            <span className="brand-mark" aria-hidden="true">SP</span>
-            <div>
-              <div className="auth-brand-name">ServicePath AI</div>
-              <div className="muted small-text">B2B service exchange desk</div>
-            </div>
+            <ServicePathLogo theme="light" size="lg" />
           </div>
           <h1>{mode === 'login' ? 'Sign in to your desk' : 'Register your business'}</h1>
           <p className="muted auth-sub">

@@ -1,4 +1,3 @@
--- Table: account
 DROP TABLE IF EXISTS `account`;
 CREATE TABLE `account` (
   `account_id` int NOT NULL,

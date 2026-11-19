@@ -2,8 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { useApi } from '../api.js';
 import { Async, DetailsPanel, Disclosure, Icon, PageHeader } from './ui.jsx';
 
-// Phase 2: experimental demand forecast trained on an isolated 24-month synthetic history.
-
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const monthLabel = (ym, withYear = true) => {
   const [y, m] = ym.split('-');
@@ -57,7 +55,6 @@ function ForecastView({ data }) {
         </span>
       </p>
 
-      {/* Consolidated Category Ranking & Selector Strip (replaces duplicate cards + tabs) */}
       <section aria-label="Next-month projections by category">
         <div className="forecast-selector-strip" role="tablist" aria-label="Service categories">
           {ranked.map((c, idx) => {
@@ -95,7 +92,6 @@ function ForecastView({ data }) {
         </div>
       </section>
 
-      {/* Main Chart Focal Point */}
       <section className="sheet chart-card">
         <div className="chart-head">
           <div>
@@ -216,7 +212,7 @@ function TrendChart({ cat }) {
 
   return (
     <div className="chart-wrap">
-      {/* Live accessible readout works identically for keyboard, touch, and mouse */}
+
       <div className="chart-readout" aria-live="polite">
         <span className="readout-month">{monthLong(activePoint.month)}</span>
         <span className="readout-val tabular">

@@ -1,5 +1,3 @@
-// Generates database/phase2_demand_forecasting.sql and applies it to the local database.
-// Strictly preserves all 7 existing core tables and their records.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +14,6 @@ const months = [
   '2026-07', '2026-08', '2026-09', '2026-10',
 ];
 
-// Deterministic 24-month demand series per category (Nov 2024 - Oct 2026)
 const categorySeries = {
   IT: {
     services: [
@@ -50,7 +47,7 @@ for (let mIdx = 0; mIdx < months.length; mIdx++) {
       const svc = cfg.services[i % cfg.services.length];
       const day = String(((i * 3 + mIdx) % 27) + 1).padStart(2, '0');
       const requestDate = `${ym}-${day}`;
-      // Deterministic budget variation around service base price
+
       const budgetFactor = 0.9 + ((i + mIdx) % 5) * 0.05;
       const estimatedBudget = (svc.baseBudget * budgetFactor).toFixed(2);
       rows.push(
@@ -144,7 +141,6 @@ async function applySql() {
     )
   `);
 
-  // Insert in batches of 250
   for (let i = 0; i < rows.length; i += 250) {
     const chunk = rows.slice(i, i + 250);
     await pool.query(
@@ -164,4 +160,3 @@ applySql().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-

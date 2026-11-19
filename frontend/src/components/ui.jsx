@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-
-// Shared UI primitives. Keep structural & visual conventions consistent across all screens.
+import { ServicePathMark } from './BrandLogo.jsx';
 
 export const money = (value) =>
   value === null || value === undefined
     ? '—'
     : `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
-// ---------- Icons (inline SVG, consistent 1.75px stroke) ----------
 const ICON_PATHS = {
   overview: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
   requests: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9h6m-6-4h6',
@@ -18,6 +16,8 @@ const ICON_PATHS = {
   simulation: 'M13 2 4 14h7l-1 8 9-12h-7l1-8z',
   forecasts: 'M3 3v18h18M7 15l4-4 3 3 5-6',
   chevron: 'm9 6 6 6-6 6',
+  chevronLeft: 'm15 18-6-6 6-6',
+  chevronRight: 'm9 18 6-6-6-6',
   info: 'M12 16v-4m0-4h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z',
   arrowUp: 'M12 19V5m0 0-6 6m6-6 6 6',
   arrowRight: 'M5 12h14m0 0-6-6m6 6-6 6',
@@ -53,10 +53,10 @@ export function Icon({ name, size = 16, className = '', strokeWidth = 1.75 }) {
   );
 }
 
-// ---------- States ----------
 export function Loading({ what = 'data' }) {
   return (
     <div className="state" role="status" aria-live="polite">
+      <ServicePathMark size={24} className="sp-mark-pulse" />
       <span className="spinner" aria-hidden="true" />
       <span>Loading {what}…</span>
     </div>
@@ -99,7 +99,6 @@ export function Async({ result, what, emptyText, isEmpty, children }) {
   return children(result.data);
 }
 
-// ---------- Status & Evidence Indicators ----------
 export function Badge({ status, tone: forcedTone }) {
   const tone =
     forcedTone ||
@@ -156,7 +155,6 @@ export function ScoreMeter({ value, max, label, hint }) {
   );
 }
 
-// ---------- Accessible Modal with focus trap, Escape close, and opener restoration ----------
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -228,7 +226,6 @@ export function Modal({ title, onClose, children }) {
   );
 }
 
-// ---------- Form Helpers ----------
 export function Field({ label, children, hint, optional }) {
   return (
     <label className="field">
@@ -263,7 +260,6 @@ export function useForm(initial, submit) {
   return { values, set, setValue, error, busy, onSubmit };
 }
 
-// ---------- Layout Headers & Navigation Controls ----------
 export function PageHeader({ title, subtitle, action, meta }) {
   return (
     <header className="page-head">
@@ -308,7 +304,6 @@ export function Tabs({ tabs, value, onChange, label = 'Views' }) {
   );
 }
 
-// Inline contextual disclosure ("Why recommended?", "How was this forecast calculated?")
 export function Disclosure({ label, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -322,7 +317,6 @@ export function Disclosure({ label, children, defaultOpen = false }) {
   );
 }
 
-// Collapsible technical / DBMS evaluation drawer
 export function DetailsPanel({ title, subtitle, badge = 'Technical details', defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (

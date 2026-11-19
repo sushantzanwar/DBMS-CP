@@ -32,7 +32,7 @@ async function runPhase3Tests() {
   });
 
   try {
-    // 1. Authorization check (unauthenticated requests blocked with 401)
+
     const unauthPost = await requestJson('POST', '/requests/1001/simulate-unavailability', {
       body: { unavailableProviderIds: [4] },
     });
@@ -44,10 +44,8 @@ async function runPhase3Tests() {
     assert.equal(unauthAnalytics.status, 401, 'Unauthenticated analytics POST must return 401');
     console.log('[PASS] 1. Authorization enforced: unauthenticated simulation requests rejected with 401.');
 
-    // Issue valid session token for TechNova Solutions (business_id = 1)
     const token = jwt.sign({ businessId: 1 }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    // 2. Input validation checks
     const badReqId = await requestJson('POST', '/requests/abc/simulate-unavailability', {
       token,
       body: { unavailableProviderIds: [4] },
@@ -74,7 +72,7 @@ async function runPhase3Tests() {
 
     const buyerAsUnavailable = await requestJson('POST', '/requests/1001/simulate-unavailability', {
       token,
-      body: { unavailableProviderIds: [1] }, // business_id 1 is the buyer of request 1001
+      body: { unavailableProviderIds: [1] },
     });
     assert.equal(buyerAsUnavailable.status, 400, 'Buyer business ID in unavailableProviderIds must return 400');
 
@@ -85,7 +83,6 @@ async function runPhase3Tests() {
     assert.equal(nonExistentProv.status, 404, 'Non-existent provider ID must return 404');
     console.log('[PASS] 2. Input validation verified (400 for invalid IDs/empty/buyer, 404 for unknown request/provider).');
 
-    // 3. Single Top-Provider Unavailability Simulation (Request 1001, Provider #4 EduSpark Academy)
     const simSingle = await requestJson('POST', '/requests/1001/simulate-unavailability', {
       token,
       body: {
@@ -115,7 +112,6 @@ async function runPhase3Tests() {
     assert.equal(newlyPromotedSingle.simulated_rank, 5);
     console.log('[PASS] 3. Single top-provider unavailability verified: #2 promoted to #1, standby #6 entered Top 5 at #5.');
 
-    // 4. Multi-Provider Unavailability Simulation via GET & Analytics POST (Exclude top 2: IDs 4 and 5)
     const simMultiGet = await requestJson(
       'GET',
       '/requests/1001/simulate-unavailability?unavailableProviderIds=4,5&reason=Regional+outage',
@@ -139,7 +135,6 @@ async function runPhase3Tests() {
     );
     console.log('[PASS] 4. Multi-provider simulation verified across GET and POST routes (ranks #6 and #7 promoted into Top 5).');
 
-    // 5. Exhausted Pool Edge Case (All 7 eligible providers unavailable)
     const simAllUnavailable = await requestJson('POST', '/requests/1001/simulate-unavailability', {
       token,
       body: { unavailableProviderIds: [2, 3, 4, 5, 6, 7, 8] },
@@ -149,7 +144,6 @@ async function runPhase3Tests() {
     assert.equal(simAllUnavailable.data.simulationEvent.remainingAvailablePoolSize, 0);
     console.log('[PASS] 5. Exhausted candidate pool edge case handled gracefully (0 alternatives returned).');
 
-    // 6. Verify Ephemeral Read-Only Guarantee: Phase 1 & Phase 2 outputs and DB state untouched
     const phase1RecsAfter = await requestJson('GET', '/requests/1001/recommendations', { token });
     assert.equal(phase1RecsAfter.status, 200);
     assert.equal(phase1RecsAfter.data.length, 5);

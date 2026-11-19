@@ -1,6 +1,3 @@
-// Everything that changes data (INSERT / UPDATE). Each action checks WHO is asking (businessId comes from the
-// login token, never from the request body) and checks the business rules before touching the database.
-// A "transaction" here is only a database RECORD of a deal. No money moves anywhere in this application.
 import { withTransaction, nextId } from './db.js';
 import { HttpError, requireText, optionalText, requireInt, requireMoney } from './errors.js';
 import { normalizePhone, WEBSITE_PATTERN } from './auth.js';
@@ -13,8 +10,6 @@ function validDate(value) {
   return value;
 }
 
-// ---------- Business Profile ----------
-// CONCEPTS: UPDATE with WHERE business_id = ? + uniqueness verification against other rows.
 export async function updateProfile(businessId, body) {
   const name = requireText(body.businessName, 'Business name', 100);
   const industry = requireText(body.industry, 'Industry', 50);
@@ -66,7 +61,6 @@ export async function updateProfile(businessId, body) {
   });
 }
 
-// ---------- Requests ----------
 export async function createRequest(businessId, body) {
   const serviceId = requireInt(body.serviceId, 'Service');
   const title = requireText(body.title, 'Title', 150);
@@ -95,7 +89,6 @@ export async function createRequest(businessId, body) {
   });
 }
 
-// Owner can cancel an open request or re-open a cancelled one.
 export async function setRequestStatus(businessId, requestId, status) {
   if (!['Open', 'Cancelled'].includes(status)) throw new HttpError(400, 'Status must be Open or Cancelled.');
   return withTransaction(async (connection) => {
@@ -110,7 +103,6 @@ export async function setRequestStatus(businessId, requestId, status) {
   });
 }
 
-// ---------- Proposals ----------
 export async function createProposal(businessId, body) {
   const requestId = requireInt(body.requestId, 'Request');
   const price = requireMoney(body.proposedPrice, 'Proposed price');
@@ -124,7 +116,7 @@ export async function createProposal(businessId, body) {
     if (rows[0].business_id === businessId) throw new HttpError(400, 'You cannot send a proposal for your own request.');
     if (rows[0].status !== 'Open') throw new HttpError(409, 'This request is no longer open for proposals.');
     const proposalId = await nextId(connection, 'proposal', 'proposal_id');
-    // The database also enforces one proposal per business per request (UNIQUE key) -> a duplicate gives a 409.
+
     await connection.query(
       `INSERT INTO proposal (proposal_id, request_id, provider_business_id, proposed_price, quantity,
                              estimated_delivery_duration, message, status)
@@ -135,8 +127,6 @@ export async function createProposal(businessId, body) {
   });
 }
 
-// status = 'Accepted' | 'Rejected' (by the request owner) or 'Withdrawn' (by the provider).
-// Accepting is the interesting case: four changes happen in ONE database transaction.
 export async function setProposalStatus(businessId, proposalId, status) {
   if (!['Accepted', 'Rejected', 'Withdrawn'].includes(status)) throw new HttpError(400, 'Invalid status.');
   return withTransaction(async (connection) => {
@@ -165,8 +155,6 @@ export async function setProposalStatus(businessId, proposalId, status) {
       return { proposalId, status };
     }
 
-    // Accepted: (1) accept this proposal, (2) reject the other offers, (3) mark the request In Progress,
-    // (4) record the deal in the transaction table. If any step fails, ROLLBACK undoes all of them.
     await connection.query("UPDATE proposal SET status = 'Accepted' WHERE proposal_id = ?", [proposalId]);
     await connection.query(
       "UPDATE proposal SET status = 'Rejected' WHERE request_id = ? AND proposal_id <> ? AND status = 'Submitted'",
@@ -185,8 +173,6 @@ export async function setProposalStatus(businessId, proposalId, status) {
   });
 }
 
-// ---------- Transactions ----------
-// The buyer confirms the work is finished. This updates records only; it does not process a payment.
 export async function completeTransaction(businessId, transactionId) {
   return withTransaction(async (connection) => {
     const [rows] = await connection.query(
@@ -202,8 +188,6 @@ export async function completeTransaction(businessId, transactionId) {
   });
 }
 
-// Payment status update.
-// CONCEPTS: UPDATE with state check and transaction lock (FOR UPDATE).
 export async function setTransactionPaymentStatus(businessId, transactionId, paymentStatus) {
   if (!['Pending', 'Paid', 'Refunded'].includes(paymentStatus)) {
     throw new HttpError(400, "Payment status must be 'Pending', 'Paid', or 'Refunded'.");
@@ -225,7 +209,6 @@ export async function setTransactionPaymentStatus(businessId, transactionId, pay
   });
 }
 
-// ---------- Reviews ----------
 export async function createReview(businessId, body) {
   const transactionId = requireInt(body.transactionId, 'Transaction');
   const rating = requireInt(body.rating, 'Overall rating', { min: 1, max: 5 });
@@ -255,4 +238,3 @@ export async function createReview(businessId, body) {
     return { reviewId };
   });
 }
-

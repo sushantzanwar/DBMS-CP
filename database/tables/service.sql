@@ -1,4 +1,3 @@
--- Table: service
 DROP TABLE IF EXISTS `service`;
 CREATE TABLE `service` (
   `service_id` int NOT NULL,

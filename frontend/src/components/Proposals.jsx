@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { apiRequest, useApi } from '../api.js';
 import { Async, Badge, PageHeader, Tabs, money } from './ui.jsx';
 
-// Accept / Decline (buyer) or Withdraw (provider). Reused in RequestDetail.
 export function ProposalActions({ proposalId, mode, onDone }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,3 @@
-// HTTP routes. Each one calls a function from auth.js / queries.js / actions.js and returns JSON.
 import { Router } from 'express';
 import { register, login, getCurrentUser, requireLogin } from './auth.js';
 import * as read from './queries.js';
@@ -7,7 +6,6 @@ import { toClientError, requireInt } from './errors.js';
 
 export const api = Router();
 
-// Wraps a handler so any error becomes a safe JSON message instead of leaking database details.
 const route = (handler, successStatus = 200) => async (req, res) => {
   try {
     res.status(successStatus).json(await handler(req));
@@ -18,12 +16,10 @@ const route = (handler, successStatus = 200) => async (req, res) => {
 };
 const idParam = (req) => requireInt(req.params.id, 'Id');
 
-// Public routes
 api.get('/health', route(() => read.getHealth()));
 api.post('/auth/register', route((req) => register(req.body), 201));
 api.post('/auth/login', route((req) => login(req.body)));
 
-// Everything below needs a valid login token.
 api.use(requireLogin);
 
 api.get('/auth/me', route((req) => getCurrentUser(req.businessId)));
@@ -39,7 +35,6 @@ api.get('/services/:id', route((req) => read.getService(idParam(req))));
 api.get('/services/:id/requests', route((req) => read.getServiceMatchingRequests(idParam(req))));
 api.get('/categories/summary', route(() => read.getCategorySummary()));
 
-// Advanced and filtered request routes (defined BEFORE /requests/:id)
 api.get('/requests/unanswered', route((req) => read.getUnansweredRequests(req.businessId)));
 api.get('/requests/search', route((req) => read.searchRequests({ ...req.query, businessId: req.businessId })));
 
@@ -69,7 +64,6 @@ api.get('/transactions/:id', route((req) => read.getTransaction(req.businessId, 
 api.patch('/transactions/:id/complete', route((req) => write.completeTransaction(req.businessId, idParam(req))));
 api.patch('/transactions/:id/payment', route((req) => write.setTransactionPaymentStatus(req.businessId, idParam(req), req.body.paymentStatus)));
 
-// Analytics routes
 api.get('/analytics/top-providers', route((req) => read.getTopProviders({ limit: req.query.limit })));
 api.get('/analytics/financial-summary', route((req) => read.getFinancialSummary(req.businessId)));
 api.get('/analytics/demand-forecast', route(() => read.getDemandForecast()));

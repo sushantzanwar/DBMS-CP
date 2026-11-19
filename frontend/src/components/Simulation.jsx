@@ -3,9 +3,6 @@ import { apiRequest, useApi } from '../api.js';
 import { DetailsPanel, Disclosure, Empty, Icon, PageHeader, Stars, Async, money } from './ui.jsx';
 import { MatchTag, WhyRecommended, capabilityEvidence } from './insights.jsx';
 
-// Phase 3: read-only "what if selected providers are unavailable?" simulation.
-// All ranking runs server-side using pre-LIMIT SQL exclusion; nothing is modified in the database.
-
 export default function Simulation({ onOpenBusiness }) {
   const requestsResult = useApi('/requests?scope=all');
 
@@ -83,7 +80,7 @@ function SimulationWorkspace({ requests, onOpenBusiness }) {
 
   return (
     <div className="sim-layout">
-      {/* ---------- Left Setup Column ---------- */}
+
       <section className="sheet sim-setup" aria-label="Simulation setup">
         <div className="step">
           <label className="step-label" htmlFor="sim-request-select">
@@ -211,7 +208,6 @@ function SimulationWorkspace({ requests, onOpenBusiness }) {
         </div>
       </section>
 
-      {/* ---------- Right Result Column ---------- */}
       <section className="sim-results" aria-live="polite">
         {!result ? (
           <div className="sheet placeholder-card">
@@ -237,7 +233,7 @@ function SimulationResult({ result, onOpenBusiness }) {
 
   return (
     <div className="stack">
-      {/* Direct Previous Leader vs New Recommended Provider Comparison */}
+
       <section className="sheet leader-comparison" aria-label="Leader comparison">
         <div className="leader-col">
           <div className="leader-kicker">Previous leader (baseline #1)</div>

@@ -1,6 +1,3 @@
--- ServicePath AI: business_service_db (tables, seed data and views). Generated with 'dolt dump' from the committed state.
--- Rebuild: in an empty Dolt repo (dolt init), run:  dolt sql < database/business_service_db.sql
--- (MySQL: create and select a database first, then run this file.)
 SET FOREIGN_KEY_CHECKS=0;
 SET UNIQUE_CHECKS=0;
 DROP TABLE IF EXISTS `account`;
